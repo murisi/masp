@@ -142,7 +142,7 @@ pub fn sapling_ka_agree(esk: &jubjub::Fr, pk_d: &jubjub::ExtendedPoint) -> jubju
 /// Sapling KDF for note encryption.
 ///
 /// Implements section 5.4.4.4 of the Zcash Protocol Specification.
-fn kdf_sapling(dhsecret: jubjub::SubgroupPoint, epk: &jubjub::SubgroupPoint) -> Blake2bHash {
+fn kdf_sapling(dhsecret: jubjub::SubgroupPoint, epk: &jubjub::ExtendedPoint) -> Blake2bHash {
     Blake2bParams::new()
         .hash_length(32)
         .personal(KDF_SAPLING_PERSONALIZATION)
@@ -174,7 +174,7 @@ pub fn prf_ock(
     ovk: &OutgoingViewingKey,
     cv: &jubjub::ExtendedPoint,
     cmu: &bls12_381::Scalar,
-    epk: &jubjub::SubgroupPoint,
+    epk: &jubjub::ExtendedPoint,
 ) -> OutgoingCipherKey {
     OutgoingCipherKey(
         Blake2bParams::new()
@@ -238,7 +238,7 @@ pub fn prf_ock(
 /// let outCiphertext = enc.encrypt_outgoing_plaintext(&cv.commitment().into(), &cmu);
 /// ```
 pub struct SaplingNoteEncryption<R: RngCore + CryptoRng> {
-    epk: jubjub::SubgroupPoint,
+    epk: jubjub::ExtendedPoint,
     esk: jubjub::Fr,
     note: Note,
     to: PaymentAddress,
@@ -261,7 +261,7 @@ impl<R: RngCore + CryptoRng> SaplingNoteEncryption<R> {
         mut rng: R,
     ) -> Self {
         let esk = note.generate_or_derive_esk(&mut rng);
-        let epk = note.g_d * esk;
+        let epk: jubjub::ExtendedPoint = (note.g_d * esk).into();
 
         SaplingNoteEncryption {
             epk,
@@ -280,7 +280,7 @@ impl<R: RngCore + CryptoRng> SaplingNoteEncryption<R> {
     }
 
     /// Exposes the ephemeral public key being used to encrypt this note.
-    pub fn epk(&self) -> &jubjub::SubgroupPoint {
+    pub fn epk(&self) -> &jubjub::ExtendedPoint {
         &self.epk
     }
 
@@ -361,7 +361,7 @@ impl<R: RngCore + CryptoRng> SaplingNoteEncryption<R> {
 fn parse_note_plaintext_without_memo<P: consensus::Parameters>(
     height: u32,
     ivk: &jubjub::Fr,
-    epk: &jubjub::SubgroupPoint,
+    epk: &jubjub::ExtendedPoint,
     cmu: &bls12_381::Scalar,
     plaintext: &[u8],
 ) -> Option<(Note, PaymentAddress)> {
@@ -398,7 +398,7 @@ fn parse_note_plaintext_without_memo<P: consensus::Parameters>(
     }
 
     if let Some(derived_esk) = note.derive_esk() {
-        if (note.g_d * derived_esk) != *epk {
+        if jubjub::ExtendedPoint::from(note.g_d * derived_esk) != *epk {
             return None;
         }
     }
@@ -437,7 +437,7 @@ pub fn plaintext_version_is_valid<P: consensus::Parameters>(height: u32, leadbyt
 pub fn try_sapling_note_decryption<P: consensus::Parameters>(
     height: u32,
     ivk: &jubjub::Fr,
-    epk: &jubjub::SubgroupPoint,
+    epk: &jubjub::ExtendedPoint,
     cmu: &bls12_381::Scalar,
     enc_ciphertext: &[u8],
 ) -> Option<(Note, PaymentAddress, Memo)> {
@@ -480,7 +480,7 @@ pub fn try_sapling_note_decryption<P: consensus::Parameters>(
 pub fn try_sapling_compact_note_decryption<P: consensus::Parameters>(
     height: u32,
     ivk: &jubjub::Fr,
-    epk: &jubjub::SubgroupPoint,
+    epk: &jubjub::ExtendedPoint,
     cmu: &bls12_381::Scalar,
     enc_ciphertext: &[u8],
 ) -> Option<(Note, PaymentAddress)> {
@@ -509,7 +509,7 @@ pub fn try_sapling_output_recovery_with_ock<P: consensus::Parameters>(
     height: u32,
     ock: &OutgoingCipherKey,
     cmu: &bls12_381::Scalar,
-    epk: &jubjub::SubgroupPoint,
+    epk: &jubjub::ExtendedPoint,
     enc_ciphertext: &[u8],
     out_ciphertext: &[u8],
 ) -> Option<(Note, PaymentAddress, Memo)> {
@@ -582,7 +582,7 @@ pub fn try_sapling_output_recovery_with_ock<P: consensus::Parameters>(
     memo.copy_from_slice(&plaintext[COMPACT_NOTE_SIZE..NOTE_PLAINTEXT_SIZE]);
 
     let diversifier = Diversifier(d);
-    if diversifier.g_d()? * esk != *epk {
+    if jubjub::ExtendedPoint::from(diversifier.g_d()? * esk) != *epk {
         // Published epk doesn't match calculated epk
         return None;
     }
@@ -616,7 +616,7 @@ pub fn try_sapling_output_recovery<P: consensus::Parameters>(
     ovk: &OutgoingViewingKey,
     cv: &jubjub::ExtendedPoint,
     cmu: &bls12_381::Scalar,
-    epk: &jubjub::SubgroupPoint,
+    epk: &jubjub::ExtendedPoint,
     enc_ciphertext: &[u8],
     out_ciphertext: &[u8],
 ) -> Option<(Note, PaymentAddress, Memo)> {
@@ -784,7 +784,7 @@ mod tests {
         jubjub::Fr,
         jubjub::ExtendedPoint,
         bls12_381::Scalar,
-        jubjub::SubgroupPoint,
+        jubjub::ExtendedPoint,
         [u8; ENC_CIPHERTEXT_SIZE],
         [u8; OUT_CIPHERTEXT_SIZE],
     ) {
@@ -844,7 +844,7 @@ mod tests {
         jubjub::Fr,
         jubjub::ExtendedPoint,
         bls12_381::Scalar,
-        jubjub::SubgroupPoint,
+        jubjub::ExtendedPoint,
         [u8; ENC_CIPHERTEXT_SIZE],
         [u8; OUT_CIPHERTEXT_SIZE],
     ) {
@@ -879,7 +879,7 @@ mod tests {
         ovk: &OutgoingViewingKey,
         cv: &jubjub::ExtendedPoint,
         cmu: &bls12_381::Scalar,
-        epk: &jubjub::SubgroupPoint,
+        epk: &jubjub::ExtendedPoint,
         enc_ciphertext: &mut [u8; ENC_CIPHERTEXT_SIZE],
         out_ciphertext: &[u8; OUT_CIPHERTEXT_SIZE],
         modify_plaintext: impl Fn(&mut [u8; NOTE_PLAINTEXT_SIZE]),
@@ -997,7 +997,7 @@ mod tests {
                 try_sapling_note_decryption::<TestNetwork>(
                     height,
                     &ivk,
-                    &jubjub::SubgroupPoint::random(&mut rng),
+                    &jubjub::ExtendedPoint::random(&mut rng),
                     &cmu,
                     &enc_ciphertext
                 ),
@@ -1200,7 +1200,7 @@ mod tests {
                 try_sapling_compact_note_decryption::<TestNetwork>(
                     height,
                     &ivk,
-                    &jubjub::SubgroupPoint::random(&mut rng),
+                    &jubjub::ExtendedPoint::random(&mut rng),
                     &cmu,
                     &enc_ciphertext[..COMPACT_NOTE_SIZE]
                 ),
@@ -1475,7 +1475,7 @@ mod tests {
                     &ovk,
                     &cv,
                     &cmu,
-                    &jubjub::SubgroupPoint::random(&mut rng),
+                    &jubjub::ExtendedPoint::random(&mut rng),
                     &enc_ciphertext,
                     &out_ciphertext
                 ),
@@ -1486,7 +1486,7 @@ mod tests {
                     height,
                     &ock,
                     &cmu,
-                    &jubjub::SubgroupPoint::random(&mut rng),
+                    &jubjub::ExtendedPoint::random(&mut rng),
                     &enc_ciphertext,
                     &out_ciphertext
                 ),
@@ -1792,7 +1792,7 @@ mod tests {
             let cv = read_point!(tv.cv);
             let cmu = read_bls12_381_scalar!(tv.cmu);
             let esk = read_jubjub_scalar!(tv.esk);
-            let epk = read_point!(tv.epk).into_subgroup().unwrap();
+            let epk = read_point!(tv.epk);
 
             //
             // Test the individual components
