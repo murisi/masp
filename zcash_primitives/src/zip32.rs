@@ -7,6 +7,7 @@ use blake2b_simd::Params as Blake2bParams;
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt, WriteBytesExt};
 use fpe::ff1::{BinaryNumeralString, FF1};
 use std::ops::AddAssign;
+use std::str::FromStr;
 
 use crate::{
     constants::{PROOF_GENERATION_KEY_GENERATOR, SPENDING_KEY_GENERATOR},
@@ -253,14 +254,14 @@ impl ExtendedSpendingKey {
         }
     }
 
-    pub fn read<R: Read>(mut reader: R) -> io::Result<Self> {
+    pub fn read<R: Read>(reader: &mut R) -> io::Result<Self> {
         let depth = reader.read_u8()?;
         let mut tag = [0; 4];
         reader.read_exact(&mut tag)?;
         let i = reader.read_u32::<LittleEndian>()?;
         let mut c = [0; 32];
         reader.read_exact(&mut c)?;
-        let expsk = ExpandedSpendingKey::read(&mut reader)?;
+        let expsk = ExpandedSpendingKey::read(reader)?;
         let mut dk = [0; 32];
         reader.read_exact(&mut dk)?;
 
@@ -337,6 +338,19 @@ impl ExtendedSpendingKey {
 
     pub fn default_address(&self) -> Result<(DiversifierIndex, PaymentAddress), ()> {
         ExtendedFullViewingKey::from(self).default_address()
+    }
+}
+
+impl FromStr for ExtendedSpendingKey {
+    type Err = std::io::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut bytes = s.as_bytes();
+        let esk = Self::read(&mut bytes)?;
+        if bytes.len() == 0 {
+            Ok(esk)
+        } else {
+            Err(Self::Err::from(std::io::ErrorKind::InvalidData))
+        }
     }
 }
 

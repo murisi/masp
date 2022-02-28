@@ -69,7 +69,7 @@ impl ExpandedSpendingKey {
         }
     }
 
-    pub fn read<R: Read>(mut reader: R) -> io::Result<Self> {
+    pub fn read<R: Read>(reader: &mut R) -> io::Result<Self> {
         let mut ask_repr = [0u8; 32];
         reader.read_exact(ask_repr.as_mut())?;
         let ask = Option::from(jubjub::Fr::from_repr(ask_repr))
