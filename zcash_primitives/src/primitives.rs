@@ -8,6 +8,9 @@ use borsh::maybestd::io::Write;
 use borsh::BorshDeserialize;
 use borsh::maybestd::io::ErrorKind;
 use borsh::maybestd::io::Error;
+use std::cmp::Ordering;
+use std::hash::Hasher;
+use std::hash::Hash;
 
 use crate::constants;
 
@@ -90,7 +93,7 @@ impl ViewingKey {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Diversifier(pub [u8; 11]);
 
 impl Diversifier {
@@ -105,16 +108,10 @@ impl Diversifier {
 ///
 /// `pk_d` is guaranteed to be prime-order (i.e. in the prime-order subgroup of Jubjub,
 /// and not the identity).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaymentAddress {
     pk_d: jubjub::SubgroupPoint,
     diversifier: Diversifier,
-}
-
-impl PartialEq for PaymentAddress {
-    fn eq(&self, other: &Self) -> bool {
-        self.pk_d == other.pk_d && self.diversifier == other.diversifier
-    }
 }
 
 impl PaymentAddress {
@@ -189,6 +186,24 @@ impl PaymentAddress {
             g_d,
             pk_d: self.pk_d.clone(),
         })
+    }
+}
+
+impl PartialOrd for PaymentAddress {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.to_bytes().partial_cmp(&other.to_bytes())
+    }
+}
+
+impl Ord for PaymentAddress {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.to_bytes().cmp(&other.to_bytes())
+    }
+}
+
+impl Hash for PaymentAddress {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.to_bytes().hash(state)
     }
 }
 
