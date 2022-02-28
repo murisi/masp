@@ -13,6 +13,7 @@ use std::hash::Hasher;
 use std::hash::Hash;
 use std::fmt::Formatter;
 use std::fmt::Display;
+use std::str::FromStr;
 
 use crate::constants;
 
@@ -194,6 +195,15 @@ impl PaymentAddress {
 impl Display for PaymentAddress {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", hex::encode(&self.to_bytes()))
+    }
+}
+
+impl FromStr for PaymentAddress {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let vec = hex::decode(s).map_err(|x| Error::new(ErrorKind::InvalidData, x))?;
+        BorshDeserialize::try_from_slice(&vec)
     }
 }
 
