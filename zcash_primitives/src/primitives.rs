@@ -3,6 +3,11 @@
 use ff::PrimeField;
 use group::{Curve, Group, GroupEncoding};
 use std::convert::TryInto;
+use borsh::BorshSerialize;
+use borsh::maybestd::io::Write;
+use borsh::BorshDeserialize;
+use borsh::maybestd::io::ErrorKind;
+use borsh::maybestd::io::Error;
 
 use crate::constants;
 
@@ -184,6 +189,22 @@ impl PaymentAddress {
             g_d,
             pk_d: self.pk_d.clone(),
         })
+    }
+}
+
+impl BorshSerialize for PaymentAddress {
+    fn serialize<W: Write>(&self, writer: &mut W) -> borsh::maybestd::io::Result<()> {
+        writer.write(self.to_bytes().as_ref()).and(Ok(()))
+    }
+}
+
+impl BorshDeserialize for PaymentAddress {
+    fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
+        let data = buf.get(..43).ok_or(Error::from(ErrorKind::UnexpectedEof))?;
+        let res = Self::from_bytes(data.try_into().unwrap());
+        let pa = res.ok_or(Error::from(ErrorKind::InvalidData))?;
+        *buf = &buf[43..];
+        Ok(pa)
     }
 }
 
