@@ -11,6 +11,8 @@ use borsh::maybestd::io::Error;
 use std::cmp::Ordering;
 use std::hash::Hasher;
 use std::hash::Hash;
+use std::fmt::Formatter;
+use std::fmt::Display;
 
 use crate::constants;
 
@@ -186,6 +188,12 @@ impl PaymentAddress {
             g_d,
             pk_d: self.pk_d.clone(),
         })
+    }
+}
+
+impl Display for PaymentAddress {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", hex::encode(&self.to_bytes()))
     }
 }
 
