@@ -3,11 +3,11 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use hex;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt;
 use std::io::{self, Read, Write};
 use std::ops::Deref;
-use serde::{Serialize, Deserialize};
 
 use crate::redjubjub::Signature;
 use crate::serialize::Vector;
@@ -30,7 +30,18 @@ const SAPLING_VERSION_GROUP_ID: u32 = 0x892F2085;
 const SAPLING_TX_VERSION: u32 = 4;
 
 #[derive(
-    Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize, Serialize, Deserialize,
+    Clone,
+    Copy,
+    Debug,
+    PartialOrd,
+    Ord,
+    PartialEq,
+    Eq,
+    Hash,
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
 )]
 pub struct TxId(pub [u8; 32]);
 

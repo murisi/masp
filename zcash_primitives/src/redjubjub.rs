@@ -3,15 +3,17 @@
 //!
 //! [RedJubjub]: https://zips.z.cash/protocol/protocol.pdf#concretereddsa
 
-use crate::util::{deserialize_extended_point, sdeserialize_extended_point, sserialize_extended_point};
+use crate::util::{
+    deserialize_extended_point, sdeserialize_extended_point, sserialize_extended_point,
+};
 use borsh::{BorshDeserialize, BorshSerialize};
 use ff::{Field, PrimeField};
 use group::GroupEncoding;
 use jubjub::{ExtendedPoint, SubgroupPoint};
 use rand_core::RngCore;
+use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 use std::ops::{AddAssign, MulAssign, Neg};
-use serde::{Serialize, Deserialize};
 
 use crate::util::hash_to_scalar;
 
@@ -43,7 +45,8 @@ pub struct PrivateKey(pub jubjub::Fr);
 pub struct PublicKey(
     #[serde(serialize_with = "sserialize_extended_point")]
     #[serde(deserialize_with = "sdeserialize_extended_point")]
-    pub ExtendedPoint);
+    pub ExtendedPoint,
+);
 
 impl BorshDeserialize for PublicKey {
     fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {

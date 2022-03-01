@@ -2,9 +2,9 @@
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{ReadBytesExt, WriteBytesExt};
+use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 use std::ops::Shl;
-use serde::{Serialize, Deserialize};
 
 use crate::serialize::Vector;
 

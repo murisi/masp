@@ -1,7 +1,7 @@
 use borsh::{BorshDeserialize, BorshSerialize};
+use serde::{Deserialize, Serialize};
 use std::iter::Sum;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
-use serde::{Serialize, Deserialize};
 
 const COIN: i64 = 1_0000_0000;
 const MAX_MONEY: i64 = 21_000_000 * COIN;
@@ -19,7 +19,9 @@ pub const DEFAULT_FEE: Amount = Amount(10000);
 /// by the network consensus rules.
 ///
 /// [`Transaction`]: crate::transaction::Transaction
-#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize, Serialize, Deserialize,
+)]
 pub struct Amount(i64);
 
 impl Amount {

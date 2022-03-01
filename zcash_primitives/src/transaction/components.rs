@@ -6,9 +6,9 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use ff::PrimeField;
 use group::GroupEncoding;
+use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
-use serde::{Serialize, Deserialize};
 
 use crate::legacy::Script;
 use crate::redjubjub::{PublicKey, Signature};
@@ -443,8 +443,12 @@ pub struct JSDescription {
     random_seed: [u8; 32],
     macs: [[u8; 32]; ZC_NUM_JS_INPUTS],
     proof: SproutProof,
-    #[serde(serialize_with = "sserialize_array::<_, SerdeArray<u8, 601>, [u8; 601], ZC_NUM_JS_OUTPUTS>")]
-    #[serde(deserialize_with = "sdeserialize_array::<_, SerdeArray<u8, 601>, [u8; 601], ZC_NUM_JS_OUTPUTS>")]
+    #[serde(
+        serialize_with = "sserialize_array::<_, SerdeArray<u8, 601>, [u8; 601], ZC_NUM_JS_OUTPUTS>"
+    )]
+    #[serde(
+        deserialize_with = "sdeserialize_array::<_, SerdeArray<u8, 601>, [u8; 601], ZC_NUM_JS_OUTPUTS>"
+    )]
     ciphertexts: [[u8; 601]; ZC_NUM_JS_OUTPUTS],
 }
 

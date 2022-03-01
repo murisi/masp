@@ -2,13 +2,13 @@ use blake2b_simd::Params;
 use borsh::maybestd::io::{Error, ErrorKind};
 use borsh::BorshDeserialize;
 use group::GroupEncoding;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde::ser::SerializeTuple;
 use serde::de::{SeqAccess, Visitor};
-use std::fmt;
-use std::marker::PhantomData;
+use serde::ser::SerializeTuple;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::convert::TryInto;
+use std::fmt;
 use std::fmt::Debug;
+use std::marker::PhantomData;
 
 use crate::{consensus, consensus::NetworkUpgrade, primitives::Rseed};
 use ff::Field;
@@ -51,7 +51,9 @@ pub fn deserialize_scalar(buf: &mut &[u8]) -> borsh::maybestd::io::Result<bls12_
     .ok_or_else(|| Error::from(ErrorKind::InvalidData))
 }
 
-pub fn sdeserialize_extended_point<'de, D>(deserializer: D) -> Result<jubjub::ExtendedPoint, D::Error>
+pub fn sdeserialize_extended_point<'de, D>(
+    deserializer: D,
+) -> Result<jubjub::ExtendedPoint, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -60,7 +62,6 @@ where
         .ok_or_else(|| Error::from(ErrorKind::InvalidData))
         .map_err(serde::de::Error::custom)
 }
-
 
 pub fn sserialize_extended_point<S>(x: &jubjub::ExtendedPoint, s: S) -> Result<S::Ok, S::Error>
 where
@@ -86,13 +87,17 @@ where
     x.to_bytes().serialize(s)
 }
 
-pub fn sdeserialize_array<'de, D, U: Deserialize<'de> + Into<T>, T: Debug, const N:usize>(deserializer: D) -> Result<[T; N], D::Error>
+pub fn sdeserialize_array<'de, D, U: Deserialize<'de> + Into<T>, T: Debug, const N: usize>(
+    deserializer: D,
+) -> Result<[T; N], D::Error>
 where
     D: Deserializer<'de>,
 {
     struct ByteArrayVisitor<U, T, const N: usize>(PhantomData<U>, PhantomData<T>);
 
-    impl<'de, U: Deserialize<'de> + Into<T>, T: Debug, const N: usize> Visitor<'de> for ByteArrayVisitor<U, T, N> {
+    impl<'de, U: Deserialize<'de> + Into<T>, T: Debug, const N: usize> Visitor<'de>
+        for ByteArrayVisitor<U, T, N>
+    {
         type Value = [T; N];
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -107,8 +112,10 @@ where
             #[allow(clippy::needless_range_loop)]
             for i in 0..N {
                 let elt: Option<U> = seq.next_element()?;
-                arr.push(elt
-                    .ok_or_else(|| serde::de::Error::invalid_length(i, &self))?.into());
+                arr.push(
+                    elt.ok_or_else(|| serde::de::Error::invalid_length(i, &self))?
+                        .into(),
+                );
             }
             Ok(arr.try_into().unwrap())
         }
@@ -117,7 +124,10 @@ where
     deserializer.deserialize_tuple(N, ByteArrayVisitor::<U, T, N>(PhantomData, PhantomData))
 }
 
-pub fn sserialize_array<S, U: Serialize + From<T>, T: Clone, const N:usize>(arr: &[T; N], serializer: S) -> Result<S::Ok, S::Error>
+pub fn sserialize_array<S, U: Serialize + From<T>, T: Clone, const N: usize>(
+    arr: &[T; N],
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -129,32 +139,44 @@ where
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct SerdeArray<T: Clone + Debug + Serialize + for <'des> Deserialize<'des>, const N: usize>(
+pub struct SerdeArray<T: Clone + Debug + Serialize + for<'des> Deserialize<'des>, const N: usize>(
     #[serde(serialize_with = "sserialize_array::<_, T, T, N>")]
     #[serde(deserialize_with = "sdeserialize_array::<_, T, T, N>")]
-    [T; N]
+    [T; N],
 );
 
-impl<T: Clone + Debug + Serialize + for <'des> Deserialize<'des>, const N: usize> From<[T; N]> for SerdeArray<T, N> {
+impl<T: Clone + Debug + Serialize + for<'des> Deserialize<'des>, const N: usize> From<[T; N]>
+    for SerdeArray<T, N>
+{
     fn from(x: [T; N]) -> Self {
         Self(x)
     }
 }
 
-impl<T: Clone + Debug + Serialize + for <'des> Deserialize<'des>, const N: usize> Into<[T; N]> for SerdeArray<T, N> {
+impl<T: Clone + Debug + Serialize + for<'des> Deserialize<'des>, const N: usize> Into<[T; N]>
+    for SerdeArray<T, N>
+{
     fn into(self) -> [T; N] {
         self.0
     }
 }
 
-pub fn sserialize_option<S, U: Serialize + From<T>, T: Clone>(opt: &Option<T>, serializer: S) -> Result<S::Ok, S::Error>
+pub fn sserialize_option<S, U: Serialize + From<T>, T: Clone>(
+    opt: &Option<T>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    opt.as_ref().map(T::clone).map(U::from).serialize(serializer)
+    opt.as_ref()
+        .map(T::clone)
+        .map(U::from)
+        .serialize(serializer)
 }
 
-pub fn sdeserialize_option<'de, D, U: Deserialize<'de> + Into<T>, T: Debug>(deserializer: D) -> Result<Option<T>, D::Error>
+pub fn sdeserialize_option<'de, D, U: Deserialize<'de> + Into<T>, T: Debug>(
+    deserializer: D,
+) -> Result<Option<T>, D::Error>
 where
     D: Deserializer<'de>,
 {
