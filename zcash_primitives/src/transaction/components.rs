@@ -9,6 +9,9 @@ use group::GroupEncoding;
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
+use std::hash::Hasher;
+use std::hash::Hash;
+use std::cmp::Ordering;
 
 use crate::legacy::Script;
 use crate::redjubjub::{PublicKey, Signature};
@@ -25,7 +28,7 @@ const PHGR_PROOF_SIZE: usize = 33 + 33 + 65 + 33 + 33 + 33 + 33 + 33;
 const ZC_NUM_JS_INPUTS: usize = 2;
 const ZC_NUM_JS_OUTPUTS: usize = 2;
 
-#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Hash)]
 pub struct OutPoint {
     hash: [u8; 32],
     n: u32,
@@ -57,7 +60,7 @@ impl OutPoint {
     }
 }
 
-#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 pub struct TxIn {
     pub prevout: OutPoint,
     pub script_sig: Script,
@@ -94,7 +97,7 @@ impl TxIn {
     }
 }
 
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Hash, PartialOrd, PartialEq, Ord, Eq)]
 pub struct TxOut {
     pub value: Amount,
     pub script_pubkey: Script,
@@ -122,7 +125,7 @@ impl TxOut {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct SpendDescription {
     #[serde(serialize_with = "sserialize_extended_point")]
     #[serde(deserialize_with = "sdeserialize_extended_point")]
@@ -136,6 +139,23 @@ pub struct SpendDescription {
     #[serde(deserialize_with = "sdeserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
     pub zkproof: [u8; GROTH_PROOF_SIZE],
     pub spend_auth_sig: Option<Signature>,
+}
+
+impl PartialOrd for SpendDescription {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        (self.cv.to_bytes(), self.anchor.to_bytes(), self.nullifier, self.rk, self.zkproof, self.spend_auth_sig).partial_cmp(&(other.cv.to_bytes(), other.anchor.to_bytes(), other.nullifier, other.rk, other.zkproof, other.spend_auth_sig))
+    }
+}
+
+impl Hash for SpendDescription {
+    fn hash<H>(&self, state: &mut H) where H: Hasher {
+        self.cv.to_bytes().hash(state);
+        self.anchor.to_bytes().hash(state);
+        self.nullifier.hash(state);
+        self.rk.hash(state);
+        self.zkproof.hash(state);
+        self.spend_auth_sig.hash(state);
+    }
 }
 
 impl BorshSerialize for SpendDescription {
@@ -248,7 +268,7 @@ impl SpendDescription {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct OutputDescription {
     #[serde(serialize_with = "sserialize_extended_point")]
     #[serde(deserialize_with = "sdeserialize_extended_point")]
@@ -269,6 +289,24 @@ pub struct OutputDescription {
     #[serde(deserialize_with = "sdeserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
     pub zkproof: [u8; GROTH_PROOF_SIZE],
 }
+
+impl PartialOrd for OutputDescription {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        (self.cv.to_bytes(), self.cmu.to_bytes(), self.ephemeral_key.to_bytes(), self.enc_ciphertext, self.out_ciphertext, self.zkproof).partial_cmp(&(other.cv.to_bytes(), other.cmu.to_bytes(), other.ephemeral_key.to_bytes(), other.enc_ciphertext, other.out_ciphertext, other.zkproof))
+    }
+}
+
+impl Hash for OutputDescription {
+    fn hash<H>(&self, state: &mut H) where H: Hasher {
+        self.cv.to_bytes().hash(state);
+        self.cmu.to_bytes().hash(state);
+        self.ephemeral_key.to_bytes().hash(state);
+        self.enc_ciphertext.hash(state);
+        self.out_ciphertext.hash(state);
+        self.zkproof.hash(state);
+    }
+}
+
 
 impl BorshDeserialize for OutputDescription {
     fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
@@ -386,7 +424,7 @@ impl OutputDescription {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 enum SproutProof {
     #[serde(serialize_with = "sserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
     #[serde(deserialize_with = "sdeserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
@@ -432,7 +470,7 @@ impl std::fmt::Debug for SproutProof {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 pub struct JSDescription {
     vpub_old: Amount,
     vpub_new: Amount,

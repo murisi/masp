@@ -54,7 +54,7 @@ impl fmt::Display for TxId {
 }
 
 /// A Zcash transaction.
-#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Hash, Eq, PartialOrd)]
 pub struct Transaction {
     txid: TxId,
     data: TransactionData,
@@ -74,7 +74,7 @@ impl PartialEq for Transaction {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 pub struct TransactionData {
     pub overwintered: bool,
     pub version: u32,

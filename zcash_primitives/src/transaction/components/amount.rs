@@ -20,7 +20,7 @@ pub const DEFAULT_FEE: Amount = Amount(10000);
 ///
 /// [`Transaction`]: crate::transaction::Transaction
 #[derive(
-    Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize, Serialize, Deserialize,
+    Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialOrd, Eq, Ord, Hash
 )]
 pub struct Amount(i64);
 

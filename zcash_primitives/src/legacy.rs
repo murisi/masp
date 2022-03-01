@@ -28,7 +28,7 @@ enum OpCode {
 }
 
 /// A serialized script, used inside transparent inputs and outputs of a transaction.
-#[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Hash, PartialOrd, PartialEq, Ord, Eq)]
 pub struct Script(pub Vec<u8>);
 
 impl Script {

@@ -14,6 +14,9 @@ use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
 use std::ops::{AddAssign, MulAssign, Neg};
+use std::hash::Hasher;
+use std::hash::Hash;
+use std::cmp::Ordering;
 
 use crate::util::hash_to_scalar;
 
@@ -33,7 +36,7 @@ fn h_star(a: &[u8], b: &[u8]) -> jubjub::Fr {
     hash_to_scalar(b"Zcash_RedJubjubH", a, b)
 }
 
-#[derive(Copy, Clone, Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, PartialOrd, PartialEq, Ord, Eq, Hash)]
 pub struct Signature {
     rbar: [u8; 32],
     sbar: [u8; 32],
@@ -41,12 +44,24 @@ pub struct Signature {
 
 pub struct PrivateKey(pub jubjub::Fr);
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Copy)]
 pub struct PublicKey(
     #[serde(serialize_with = "sserialize_extended_point")]
     #[serde(deserialize_with = "sdeserialize_extended_point")]
     pub ExtendedPoint,
 );
+
+impl PartialOrd for PublicKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.to_bytes().partial_cmp(&other.0.to_bytes())
+    }
+}
+
+impl Hash for PublicKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.to_bytes().hash(state);
+    }
+}
 
 impl BorshDeserialize for PublicKey {
     fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
