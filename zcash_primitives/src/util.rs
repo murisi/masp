@@ -86,7 +86,7 @@ where
     x.to_bytes().serialize(s)
 }
 
-pub fn ssdeserialize_array<'de, D, U: Deserialize<'de> + Into<T>, T: Debug, const N:usize>(deserializer: D) -> Result<[T; N], D::Error>
+pub fn sdeserialize_array<'de, D, U: Deserialize<'de> + Into<T>, T: Debug, const N:usize>(deserializer: D) -> Result<[T; N], D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -117,7 +117,7 @@ where
     deserializer.deserialize_tuple(N, ByteArrayVisitor::<U, T, N>(PhantomData, PhantomData))
 }
 
-pub fn ssserialize_array<S, U: Serialize + From<T>, T: Clone, const N:usize>(arr: &[T; N], serializer: S) -> Result<S::Ok, S::Error>
+pub fn sserialize_array<S, U: Serialize + From<T>, T: Clone, const N:usize>(arr: &[T; N], serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -130,8 +130,8 @@ where
 
 #[derive(Serialize, Deserialize)]
 pub struct SerdeArray<T: Clone + Debug + Serialize + for <'des> Deserialize<'des>, const N: usize>(
-    #[serde(serialize_with = "ssserialize_array::<_, T, T, N>")]
-    #[serde(deserialize_with = "ssdeserialize_array::<_, T, T, N>")]
+    #[serde(serialize_with = "sserialize_array::<_, T, T, N>")]
+    #[serde(deserialize_with = "sdeserialize_array::<_, T, T, N>")]
     [T; N]
 );
 

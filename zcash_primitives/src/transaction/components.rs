@@ -132,8 +132,8 @@ pub struct SpendDescription {
     pub anchor: bls12_381::Scalar,
     pub nullifier: [u8; 32],
     pub rk: PublicKey,
-    #[serde(serialize_with = "ssserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
-    #[serde(deserialize_with = "ssdeserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
+    #[serde(serialize_with = "sserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
+    #[serde(deserialize_with = "sdeserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
     pub zkproof: [u8; GROTH_PROOF_SIZE],
     pub spend_auth_sig: Option<Signature>,
 }
@@ -259,14 +259,14 @@ pub struct OutputDescription {
     #[serde(serialize_with = "sserialize_extended_point")]
     #[serde(deserialize_with = "sdeserialize_extended_point")]
     pub ephemeral_key: jubjub::ExtendedPoint,
-    #[serde(serialize_with = "ssserialize_array::<_, u8, u8, 580>")]
-    #[serde(deserialize_with = "ssdeserialize_array::<_, u8, u8, 580>")]
+    #[serde(serialize_with = "sserialize_array::<_, u8, u8, 580>")]
+    #[serde(deserialize_with = "sdeserialize_array::<_, u8, u8, 580>")]
     pub enc_ciphertext: [u8; 580],
-    #[serde(serialize_with = "ssserialize_array::<_, u8, u8, 80>")]
-    #[serde(deserialize_with = "ssdeserialize_array::<_, u8, u8, 80>")]
+    #[serde(serialize_with = "sserialize_array::<_, u8, u8, 80>")]
+    #[serde(deserialize_with = "sdeserialize_array::<_, u8, u8, 80>")]
     pub out_ciphertext: [u8; 80],
-    #[serde(serialize_with = "ssserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
-    #[serde(deserialize_with = "ssdeserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
+    #[serde(serialize_with = "sserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
+    #[serde(deserialize_with = "sdeserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
     pub zkproof: [u8; GROTH_PROOF_SIZE],
 }
 
@@ -388,11 +388,11 @@ impl OutputDescription {
 
 #[derive(Serialize, Deserialize)]
 enum SproutProof {
-    #[serde(serialize_with = "ssserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
-    #[serde(deserialize_with = "ssdeserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
+    #[serde(serialize_with = "sserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
+    #[serde(deserialize_with = "sdeserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
     Groth([u8; GROTH_PROOF_SIZE]),
-    #[serde(serialize_with = "ssserialize_array::<_, u8, u8, PHGR_PROOF_SIZE>")]
-    #[serde(deserialize_with = "ssdeserialize_array::<_, u8, u8, PHGR_PROOF_SIZE>")]
+    #[serde(serialize_with = "sserialize_array::<_, u8, u8, PHGR_PROOF_SIZE>")]
+    #[serde(deserialize_with = "sdeserialize_array::<_, u8, u8, PHGR_PROOF_SIZE>")]
     PHGR([u8; PHGR_PROOF_SIZE]),
 }
 
@@ -443,8 +443,8 @@ pub struct JSDescription {
     random_seed: [u8; 32],
     macs: [[u8; 32]; ZC_NUM_JS_INPUTS],
     proof: SproutProof,
-    #[serde(serialize_with = "ssserialize_array::<_, SerdeArray<u8, 601>, [u8; 601], ZC_NUM_JS_OUTPUTS>")]
-    #[serde(deserialize_with = "ssdeserialize_array::<_, SerdeArray<u8, 601>, [u8; 601], ZC_NUM_JS_OUTPUTS>")]
+    #[serde(serialize_with = "sserialize_array::<_, SerdeArray<u8, 601>, [u8; 601], ZC_NUM_JS_OUTPUTS>")]
+    #[serde(deserialize_with = "sdeserialize_array::<_, SerdeArray<u8, 601>, [u8; 601], ZC_NUM_JS_OUTPUTS>")]
     ciphertexts: [[u8; 601]; ZC_NUM_JS_OUTPUTS],
 }
 
