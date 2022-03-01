@@ -37,6 +37,7 @@ secp256k1 = { version = "0.20", optional = true }
 sha2 = "0.9"
 subtle = "2.2.3"
 borsh = "0.9.0"
+serde = {version = "1.0.125", features = ["derive"]}
 
 [dev-dependencies]
 criterion = "0.3"

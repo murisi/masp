@@ -7,9 +7,11 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 use std::io::{self, Read, Write};
 use std::ops::Deref;
+use serde::{Serialize, Deserialize};
 
 use crate::redjubjub::Signature;
 use crate::serialize::Vector;
+use crate::util::*;
 
 pub mod builder;
 pub mod components;
@@ -28,7 +30,7 @@ const SAPLING_VERSION_GROUP_ID: u32 = 0x892F2085;
 const SAPLING_TX_VERSION: u32 = 4;
 
 #[derive(
-    Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize,
+    Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize, Serialize, Deserialize,
 )]
 pub struct TxId(pub [u8; 32]);
 
@@ -41,7 +43,7 @@ impl fmt::Display for TxId {
 }
 
 /// A Zcash transaction.
-#[derive(Debug, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 pub struct Transaction {
     txid: TxId,
     data: TransactionData,
@@ -61,7 +63,7 @@ impl PartialEq for Transaction {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 pub struct TransactionData {
     pub overwintered: bool,
     pub version: u32,
@@ -75,6 +77,8 @@ pub struct TransactionData {
     pub shielded_outputs: Vec<OutputDescription>,
     pub joinsplits: Vec<JSDescription>,
     pub joinsplit_pubkey: Option<[u8; 32]>,
+    #[serde(serialize_with = "sserialize_option::<_, SerdeArray<u8, 64>, [u8; 64]>")]
+    #[serde(deserialize_with = "sdeserialize_option::<_, SerdeArray<u8, 64>, [u8; 64]>")]
     pub joinsplit_sig: Option<[u8; 64]>,
     pub binding_sig: Option<Signature>,
 }

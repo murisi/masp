@@ -8,11 +8,11 @@ use ff::PrimeField;
 use group::GroupEncoding;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
+use serde::{Serialize, Deserialize};
 
 use crate::legacy::Script;
 use crate::redjubjub::{PublicKey, Signature};
-use crate::util::deserialize_extended_point;
-use crate::util::deserialize_scalar;
+use crate::util::*;
 
 pub mod amount;
 pub use self::amount::Amount;
@@ -25,7 +25,7 @@ const PHGR_PROOF_SIZE: usize = 33 + 33 + 65 + 33 + 33 + 33 + 33 + 33;
 const ZC_NUM_JS_INPUTS: usize = 2;
 const ZC_NUM_JS_OUTPUTS: usize = 2;
 
-#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 pub struct OutPoint {
     hash: [u8; 32],
     n: u32,
@@ -57,7 +57,7 @@ impl OutPoint {
     }
 }
 
-#[derive(Debug, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 pub struct TxIn {
     pub prevout: OutPoint,
     pub script_sig: Script,
@@ -94,7 +94,7 @@ impl TxIn {
     }
 }
 
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 pub struct TxOut {
     pub value: Amount,
     pub script_pubkey: Script,
@@ -122,23 +122,30 @@ impl TxOut {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct SpendDescription {
+    #[serde(serialize_with = "sserialize_extended_point")]
+    #[serde(deserialize_with = "sdeserialize_extended_point")]
     pub cv: jubjub::ExtendedPoint,
+    #[serde(serialize_with = "sserialize_scalar")]
+    #[serde(deserialize_with = "sdeserialize_scalar")]
     pub anchor: bls12_381::Scalar,
     pub nullifier: [u8; 32],
     pub rk: PublicKey,
+    #[serde(serialize_with = "ssserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
+    #[serde(deserialize_with = "ssdeserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
     pub zkproof: [u8; GROTH_PROOF_SIZE],
     pub spend_auth_sig: Option<Signature>,
 }
 
 impl BorshSerialize for SpendDescription {
     fn serialize<W: Write>(&self, writer: &mut W) -> borsh::maybestd::io::Result<()> {
-        self.cv.to_bytes().serialize(writer)?;
-        self.anchor.to_bytes().serialize(writer)?;
-        self.nullifier.serialize(writer)?;
-        self.rk.serialize(writer)?;
-        self.zkproof.serialize(writer)?;
-        self.spend_auth_sig.serialize(writer)
+        BorshSerialize::serialize(&self.cv.to_bytes(), writer)?;
+        BorshSerialize::serialize(&self.anchor.to_bytes(), writer)?;
+        BorshSerialize::serialize(&self.nullifier, writer)?;
+        BorshSerialize::serialize(&self.rk, writer)?;
+        writer.write(self.zkproof.as_ref());
+        BorshSerialize::serialize(&self.spend_auth_sig, writer)
     }
 }
 
@@ -241,12 +248,25 @@ impl SpendDescription {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct OutputDescription {
+    #[serde(serialize_with = "sserialize_extended_point")]
+    #[serde(deserialize_with = "sdeserialize_extended_point")]
     pub cv: jubjub::ExtendedPoint,
+    #[serde(serialize_with = "sserialize_scalar")]
+    #[serde(deserialize_with = "sdeserialize_scalar")]
     pub cmu: bls12_381::Scalar,
+    #[serde(serialize_with = "sserialize_extended_point")]
+    #[serde(deserialize_with = "sdeserialize_extended_point")]
     pub ephemeral_key: jubjub::ExtendedPoint,
+    #[serde(serialize_with = "ssserialize_array::<_, u8, u8, 580>")]
+    #[serde(deserialize_with = "ssdeserialize_array::<_, u8, u8, 580>")]
     pub enc_ciphertext: [u8; 580],
+    #[serde(serialize_with = "ssserialize_array::<_, u8, u8, 80>")]
+    #[serde(deserialize_with = "ssdeserialize_array::<_, u8, u8, 80>")]
     pub out_ciphertext: [u8; 80],
+    #[serde(serialize_with = "ssserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
+    #[serde(deserialize_with = "ssdeserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
     pub zkproof: [u8; GROTH_PROOF_SIZE],
 }
 
@@ -274,12 +294,13 @@ impl BorshDeserialize for OutputDescription {
 
 impl BorshSerialize for OutputDescription {
     fn serialize<W: Write>(&self, writer: &mut W) -> borsh::maybestd::io::Result<()> {
-        self.cv.to_bytes().serialize(writer)?;
-        self.cmu.to_bytes().serialize(writer)?;
-        self.ephemeral_key.to_bytes().serialize(writer)?;
-        self.enc_ciphertext.serialize(writer)?;
-        self.out_ciphertext.serialize(writer)?;
-        self.zkproof.serialize(writer)
+        BorshSerialize::serialize(&self.cv.to_bytes(), writer)?;
+        BorshSerialize::serialize(&self.cmu.to_bytes(), writer)?;
+        BorshSerialize::serialize(&self.ephemeral_key.to_bytes(), writer)?;
+        writer.write(self.enc_ciphertext.as_ref());
+        writer.write(self.out_ciphertext.as_ref());
+        writer.write(self.zkproof.as_ref());
+        Ok(())
     }
 }
 
@@ -365,14 +386,19 @@ impl OutputDescription {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 enum SproutProof {
+    #[serde(serialize_with = "ssserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
+    #[serde(deserialize_with = "ssdeserialize_array::<_, u8, u8, GROTH_PROOF_SIZE>")]
     Groth([u8; GROTH_PROOF_SIZE]),
+    #[serde(serialize_with = "ssserialize_array::<_, u8, u8, PHGR_PROOF_SIZE>")]
+    #[serde(deserialize_with = "ssdeserialize_array::<_, u8, u8, PHGR_PROOF_SIZE>")]
     PHGR([u8; PHGR_PROOF_SIZE]),
 }
 
 impl BorshDeserialize for SproutProof {
     fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
-        let tag = u8::deserialize(buf)?;
+        let tag = BorshDeserialize::deserialize(buf)?;
         match tag {
             0 => Ok(Self::Groth(deserialize_array(buf)?)),
             1 => Ok(Self::PHGR(deserialize_array(buf)?)),
@@ -385,14 +411,15 @@ impl BorshSerialize for SproutProof {
     fn serialize<W: Write>(&self, writer: &mut W) -> borsh::maybestd::io::Result<()> {
         match self {
             Self::Groth(groth) => {
-                0u8.serialize(writer)?;
-                groth.serialize(writer)
+                BorshSerialize::serialize(&0u8, writer)?;
+                writer.write(groth.as_ref());
             }
             Self::PHGR(phgr) => {
-                1u8.serialize(writer)?;
-                phgr.serialize(writer)
+                BorshSerialize::serialize(&0u8, writer)?;
+                writer.write(phgr.as_ref());
             }
         }
+        Ok(())
     }
 }
 
@@ -405,6 +432,7 @@ impl std::fmt::Debug for SproutProof {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct JSDescription {
     vpub_old: Amount,
     vpub_new: Amount,
@@ -415,6 +443,8 @@ pub struct JSDescription {
     random_seed: [u8; 32],
     macs: [[u8; 32]; ZC_NUM_JS_INPUTS],
     proof: SproutProof,
+    #[serde(serialize_with = "ssserialize_array::<_, SerdeArray<u8, 601>, [u8; 601], ZC_NUM_JS_OUTPUTS>")]
+    #[serde(deserialize_with = "ssdeserialize_array::<_, SerdeArray<u8, 601>, [u8; 601], ZC_NUM_JS_OUTPUTS>")]
     ciphertexts: [[u8; 601]; ZC_NUM_JS_OUTPUTS],
 }
 
@@ -459,17 +489,17 @@ impl BorshDeserialize for JSDescription {
 
 impl BorshSerialize for JSDescription {
     fn serialize<W: Write>(&self, writer: &mut W) -> borsh::maybestd::io::Result<()> {
-        self.vpub_old.serialize(writer)?;
-        self.vpub_new.serialize(writer)?;
-        self.anchor.serialize(writer)?;
-        self.nullifiers.serialize(writer)?;
-        self.commitments.serialize(writer)?;
-        self.ephemeral_key.serialize(writer)?;
-        self.random_seed.serialize(writer)?;
-        self.macs.serialize(writer)?;
-        self.proof.serialize(writer)?;
+        BorshSerialize::serialize(&self.vpub_old, writer)?;
+        BorshSerialize::serialize(&self.vpub_new, writer)?;
+        BorshSerialize::serialize(&self.anchor, writer)?;
+        BorshSerialize::serialize(&self.nullifiers, writer)?;
+        BorshSerialize::serialize(&self.commitments, writer)?;
+        BorshSerialize::serialize(&self.ephemeral_key, writer)?;
+        BorshSerialize::serialize(&self.random_seed, writer)?;
+        BorshSerialize::serialize(&self.macs, writer)?;
+        BorshSerialize::serialize(&self.proof, writer)?;
         for ct in self.ciphertexts {
-            ct.serialize(writer)?;
+            writer.write(ct.as_ref());
         }
         Ok(())
     }
