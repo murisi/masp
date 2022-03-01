@@ -1,9 +1,9 @@
 //! Support for legacy transparent addresses and scripts.
 
+use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{self, Read, Write};
 use std::ops::Shl;
-use borsh::{BorshSerialize, BorshDeserialize};
 
 use crate::serialize::Vector;
 

@@ -1,6 +1,6 @@
+use borsh::{BorshDeserialize, BorshSerialize};
 use std::iter::Sum;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
-use borsh::{BorshSerialize, BorshDeserialize};
 
 const COIN: i64 = 1_0000_0000;
 const MAX_MONEY: i64 = 21_000_000 * COIN;

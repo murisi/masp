@@ -1,12 +1,12 @@
 //! Structs and methods for handling Zcash transactions.
 
+use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use hex;
 use sha2::{Digest, Sha256};
 use std::fmt;
 use std::io::{self, Read, Write};
 use std::ops::Deref;
-use borsh::{BorshSerialize, BorshDeserialize};
 
 use crate::redjubjub::Signature;
 use crate::serialize::Vector;
@@ -27,7 +27,9 @@ const OVERWINTER_TX_VERSION: u32 = 3;
 const SAPLING_VERSION_GROUP_ID: u32 = 0x892F2085;
 const SAPLING_TX_VERSION: u32 = 4;
 
-#[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+#[derive(
+    Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize,
+)]
 pub struct TxId(pub [u8; 32]);
 
 impl fmt::Display for TxId {

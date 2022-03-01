@@ -1,18 +1,18 @@
 //! Structs for core Zcash primitives.
 
-use ff::PrimeField;
-use group::{Curve, Group, GroupEncoding};
-use std::convert::TryInto;
-use borsh::BorshSerialize;
+use borsh::maybestd::io::Error;
+use borsh::maybestd::io::ErrorKind;
 use borsh::maybestd::io::Write;
 use borsh::BorshDeserialize;
-use borsh::maybestd::io::ErrorKind;
-use borsh::maybestd::io::Error;
+use borsh::BorshSerialize;
+use ff::PrimeField;
+use group::{Curve, Group, GroupEncoding};
 use std::cmp::Ordering;
-use std::hash::Hasher;
-use std::hash::Hash;
-use std::fmt::Formatter;
+use std::convert::TryInto;
 use std::fmt::Display;
+use std::fmt::Formatter;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::str::FromStr;
 
 use crate::constants;

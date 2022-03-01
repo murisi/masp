@@ -3,14 +3,14 @@
 //!
 //! [RedJubjub]: https://zips.z.cash/protocol/protocol.pdf#concretereddsa
 
+use crate::util::deserialize_extended_point;
+use borsh::{BorshDeserialize, BorshSerialize};
 use ff::{Field, PrimeField};
 use group::GroupEncoding;
 use jubjub::{ExtendedPoint, SubgroupPoint};
 use rand_core::RngCore;
 use std::io::{self, Read, Write};
 use std::ops::{AddAssign, MulAssign, Neg};
-use borsh::{BorshSerialize, BorshDeserialize};
-use crate::util::deserialize_extended_point;
 
 use crate::util::hash_to_scalar;
 

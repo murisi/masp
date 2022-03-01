@@ -1,18 +1,18 @@
 //! Structs representing the components within Zcash transactions.
 
+use borsh::maybestd::io::Error;
+use borsh::maybestd::io::ErrorKind;
+use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use ff::PrimeField;
 use group::GroupEncoding;
-use std::io::{self, Read, Write};
-use borsh::{BorshSerialize, BorshDeserialize};
 use std::convert::TryInto;
-use borsh::maybestd::io::ErrorKind;
-use borsh::maybestd::io::Error;
+use std::io::{self, Read, Write};
 
 use crate::legacy::Script;
 use crate::redjubjub::{PublicKey, Signature};
-use crate::util::deserialize_scalar;
 use crate::util::deserialize_extended_point;
+use crate::util::deserialize_scalar;
 
 pub mod amount;
 pub use self::amount::Amount;
@@ -150,7 +150,14 @@ impl BorshDeserialize for SpendDescription {
         let rk = BorshDeserialize::deserialize(buf)?;
         let zkproof = deserialize_array(buf)?;
         let spend_auth_sig = BorshDeserialize::deserialize(buf)?;
-        Ok(Self { cv, anchor, nullifier, rk, zkproof, spend_auth_sig })
+        Ok(Self {
+            cv,
+            anchor,
+            nullifier,
+            rk,
+            zkproof,
+            spend_auth_sig,
+        })
     }
 }
 
@@ -247,11 +254,21 @@ impl BorshDeserialize for OutputDescription {
     fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
         let cv = deserialize_extended_point(buf)?;
         let cmu = deserialize_scalar(buf)?;
-        let ephemeral_key = Option::from(jubjub::ExtendedPoint::from_bytes(&BorshDeserialize::deserialize(buf)?)).ok_or_else(|| Error::from(ErrorKind::InvalidData))?;
+        let ephemeral_key = Option::from(jubjub::ExtendedPoint::from_bytes(
+            &BorshDeserialize::deserialize(buf)?,
+        ))
+        .ok_or_else(|| Error::from(ErrorKind::InvalidData))?;
         let enc_ciphertext = deserialize_array(buf)?;
         let out_ciphertext = deserialize_array(buf)?;
         let zkproof = deserialize_array(buf)?;
-        Ok(Self { cv, cmu, ephemeral_key, enc_ciphertext, out_ciphertext, zkproof })
+        Ok(Self {
+            cv,
+            cmu,
+            ephemeral_key,
+            enc_ciphertext,
+            out_ciphertext,
+            zkproof,
+        })
     }
 }
 
@@ -370,7 +387,7 @@ impl BorshSerialize for SproutProof {
             Self::Groth(groth) => {
                 0u8.serialize(writer)?;
                 groth.serialize(writer)
-            },
+            }
             Self::PHGR(phgr) => {
                 1u8.serialize(writer)?;
                 phgr.serialize(writer)
@@ -425,7 +442,18 @@ impl BorshDeserialize for JSDescription {
             ciphertexts.push(deserialize_array(buf)?);
         }
         let ciphertexts = ciphertexts.try_into().unwrap();
-        Ok(Self { vpub_old, vpub_new, anchor, nullifiers, commitments, ephemeral_key, random_seed, macs, proof, ciphertexts })
+        Ok(Self {
+            vpub_old,
+            vpub_new,
+            anchor,
+            nullifiers,
+            commitments,
+            ephemeral_key,
+            random_seed,
+            macs,
+            proof,
+            ciphertexts,
+        })
     }
 }
 
