@@ -4,9 +4,15 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use ff::PrimeField;
 use group::GroupEncoding;
 use std::io::{self, Read, Write};
+use borsh::{BorshSerialize, BorshDeserialize};
+use std::convert::TryInto;
+use borsh::maybestd::io::ErrorKind;
+use borsh::maybestd::io::Error;
 
 use crate::legacy::Script;
 use crate::redjubjub::{PublicKey, Signature};
+use crate::util::deserialize_scalar;
+use crate::util::deserialize_extended_point;
 
 pub mod amount;
 pub use self::amount::Amount;
@@ -19,7 +25,7 @@ const PHGR_PROOF_SIZE: usize = 33 + 33 + 65 + 33 + 33 + 33 + 33 + 33;
 const ZC_NUM_JS_INPUTS: usize = 2;
 const ZC_NUM_JS_OUTPUTS: usize = 2;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct OutPoint {
     hash: [u8; 32],
     n: u32,
@@ -51,7 +57,7 @@ impl OutPoint {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, BorshSerialize, BorshDeserialize)]
 pub struct TxIn {
     pub prevout: OutPoint,
     pub script_sig: Script,
@@ -88,7 +94,7 @@ impl TxIn {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct TxOut {
     pub value: Amount,
     pub script_pubkey: Script,
@@ -123,6 +129,29 @@ pub struct SpendDescription {
     pub rk: PublicKey,
     pub zkproof: [u8; GROTH_PROOF_SIZE],
     pub spend_auth_sig: Option<Signature>,
+}
+
+impl BorshSerialize for SpendDescription {
+    fn serialize<W: Write>(&self, writer: &mut W) -> borsh::maybestd::io::Result<()> {
+        self.cv.to_bytes().serialize(writer)?;
+        self.anchor.to_bytes().serialize(writer)?;
+        self.nullifier.serialize(writer)?;
+        self.rk.serialize(writer)?;
+        self.zkproof.serialize(writer)?;
+        self.spend_auth_sig.serialize(writer)
+    }
+}
+
+impl BorshDeserialize for SpendDescription {
+    fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
+        let cv = deserialize_extended_point(buf)?;
+        let anchor = deserialize_scalar(buf)?;
+        let nullifier = BorshDeserialize::deserialize(buf)?;
+        let rk = BorshDeserialize::deserialize(buf)?;
+        let zkproof = deserialize_array(buf)?;
+        let spend_auth_sig = BorshDeserialize::deserialize(buf)?;
+        Ok(Self { cv, anchor, nullifier, rk, zkproof, spend_auth_sig })
+    }
 }
 
 impl std::fmt::Debug for SpendDescription {
@@ -214,6 +243,29 @@ pub struct OutputDescription {
     pub zkproof: [u8; GROTH_PROOF_SIZE],
 }
 
+impl BorshDeserialize for OutputDescription {
+    fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
+        let cv = deserialize_extended_point(buf)?;
+        let cmu = deserialize_scalar(buf)?;
+        let ephemeral_key = Option::from(jubjub::ExtendedPoint::from_bytes(&BorshDeserialize::deserialize(buf)?)).ok_or_else(|| Error::from(ErrorKind::InvalidData))?;
+        let enc_ciphertext = deserialize_array(buf)?;
+        let out_ciphertext = deserialize_array(buf)?;
+        let zkproof = deserialize_array(buf)?;
+        Ok(Self { cv, cmu, ephemeral_key, enc_ciphertext, out_ciphertext, zkproof })
+    }
+}
+
+impl BorshSerialize for OutputDescription {
+    fn serialize<W: Write>(&self, writer: &mut W) -> borsh::maybestd::io::Result<()> {
+        self.cv.to_bytes().serialize(writer)?;
+        self.cmu.to_bytes().serialize(writer)?;
+        self.ephemeral_key.to_bytes().serialize(writer)?;
+        self.enc_ciphertext.serialize(writer)?;
+        self.out_ciphertext.serialize(writer)?;
+        self.zkproof.serialize(writer)
+    }
+}
+
 impl std::fmt::Debug for OutputDescription {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
@@ -301,6 +353,32 @@ enum SproutProof {
     PHGR([u8; PHGR_PROOF_SIZE]),
 }
 
+impl BorshDeserialize for SproutProof {
+    fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
+        let tag = u8::deserialize(buf)?;
+        match tag {
+            0 => Ok(Self::Groth(deserialize_array(buf)?)),
+            1 => Ok(Self::PHGR(deserialize_array(buf)?)),
+            _ => Err(Error::from(ErrorKind::InvalidData)),
+        }
+    }
+}
+
+impl BorshSerialize for SproutProof {
+    fn serialize<W: Write>(&self, writer: &mut W) -> borsh::maybestd::io::Result<()> {
+        match self {
+            Self::Groth(groth) => {
+                0u8.serialize(writer)?;
+                groth.serialize(writer)
+            },
+            Self::PHGR(phgr) => {
+                1u8.serialize(writer)?;
+                phgr.serialize(writer)
+            }
+        }
+    }
+}
+
 impl std::fmt::Debug for SproutProof {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
@@ -321,6 +399,52 @@ pub struct JSDescription {
     macs: [[u8; 32]; ZC_NUM_JS_INPUTS],
     proof: SproutProof,
     ciphertexts: [[u8; 601]; ZC_NUM_JS_OUTPUTS],
+}
+
+fn deserialize_array<const N: usize>(buf: &mut &[u8]) -> borsh::maybestd::io::Result<[u8; N]> {
+    let errf = || Error::from(ErrorKind::UnexpectedEof);
+    let data = buf.get(0..N).ok_or_else(errf)?.try_into().unwrap();
+    *buf = &buf[N..];
+    Ok(data)
+}
+
+impl BorshDeserialize for JSDescription {
+    fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
+        let vpub_old = BorshDeserialize::deserialize(buf)?;
+        let vpub_new = BorshDeserialize::deserialize(buf)?;
+        let anchor = BorshDeserialize::deserialize(buf)?;
+        let nullifiers = BorshDeserialize::deserialize(buf)?;
+        let commitments = BorshDeserialize::deserialize(buf)?;
+        let ephemeral_key = BorshDeserialize::deserialize(buf)?;
+        let random_seed = BorshDeserialize::deserialize(buf)?;
+        let macs = BorshDeserialize::deserialize(buf)?;
+        let proof = BorshDeserialize::deserialize(buf)?;
+        let mut ciphertexts = Vec::new();
+        let errf = || Error::from(ErrorKind::UnexpectedEof);
+        for i in 0..ZC_NUM_JS_OUTPUTS {
+            ciphertexts.push(deserialize_array(buf)?);
+        }
+        let ciphertexts = ciphertexts.try_into().unwrap();
+        Ok(Self { vpub_old, vpub_new, anchor, nullifiers, commitments, ephemeral_key, random_seed, macs, proof, ciphertexts })
+    }
+}
+
+impl BorshSerialize for JSDescription {
+    fn serialize<W: Write>(&self, writer: &mut W) -> borsh::maybestd::io::Result<()> {
+        self.vpub_old.serialize(writer)?;
+        self.vpub_new.serialize(writer)?;
+        self.anchor.serialize(writer)?;
+        self.nullifiers.serialize(writer)?;
+        self.commitments.serialize(writer)?;
+        self.ephemeral_key.serialize(writer)?;
+        self.random_seed.serialize(writer)?;
+        self.macs.serialize(writer)?;
+        self.proof.serialize(writer)?;
+        for ct in self.ciphertexts {
+            ct.serialize(writer)?;
+        }
+        Ok(())
+    }
 }
 
 impl std::fmt::Debug for JSDescription {

@@ -3,6 +3,7 @@
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{self, Read, Write};
 use std::ops::Shl;
+use borsh::{BorshSerialize, BorshDeserialize};
 
 use crate::serialize::Vector;
 
@@ -26,7 +27,7 @@ enum OpCode {
 }
 
 /// A serialized script, used inside transparent inputs and outputs of a transaction.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct Script(pub Vec<u8>);
 
 impl Script {

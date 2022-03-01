@@ -9,6 +9,8 @@ use jubjub::{ExtendedPoint, SubgroupPoint};
 use rand_core::RngCore;
 use std::io::{self, Read, Write};
 use std::ops::{AddAssign, MulAssign, Neg};
+use borsh::{BorshSerialize, BorshDeserialize};
+use crate::util::deserialize_extended_point;
 
 use crate::util::hash_to_scalar;
 
@@ -28,7 +30,7 @@ fn h_star(a: &[u8], b: &[u8]) -> jubjub::Fr {
     hash_to_scalar(b"Zcash_RedJubjubH", a, b)
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Signature {
     rbar: [u8; 32],
     sbar: [u8; 32],
@@ -38,6 +40,18 @@ pub struct PrivateKey(pub jubjub::Fr);
 
 #[derive(Debug)]
 pub struct PublicKey(pub ExtendedPoint);
+
+impl BorshDeserialize for PublicKey {
+    fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
+        Ok(Self(deserialize_extended_point(buf)?))
+    }
+}
+
+impl BorshSerialize for PublicKey {
+    fn serialize<W: Write>(&self, writer: &mut W) -> borsh::maybestd::io::Result<()> {
+        self.0.to_bytes().serialize(writer)
+    }
+}
 
 impl Signature {
     pub fn read<R: Read>(mut reader: R) -> io::Result<Self> {

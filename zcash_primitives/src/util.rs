@@ -1,4 +1,7 @@
 use blake2b_simd::Params;
+use borsh::maybestd::io::{Error, ErrorKind};
+use borsh::BorshDeserialize;
+use group::GroupEncoding;
 
 use crate::{consensus, consensus::NetworkUpgrade, primitives::Rseed};
 use ff::Field;
@@ -23,4 +26,12 @@ pub fn generate_random_rseed<P: consensus::Parameters, R: RngCore + CryptoRng>(
     } else {
         Rseed::BeforeZip212(jubjub::Fr::random(rng))
     }
+}
+
+pub fn deserialize_extended_point(buf: &mut &[u8]) -> borsh::maybestd::io::Result<jubjub::ExtendedPoint> {
+    Option::from(jubjub::ExtendedPoint::from_bytes(&BorshDeserialize::deserialize(buf)?)).ok_or_else(|| Error::from(ErrorKind::InvalidData))
+}
+
+pub fn deserialize_scalar(buf: &mut &[u8]) -> borsh::maybestd::io::Result<bls12_381::Scalar> {
+    Option::from(bls12_381::Scalar::from_bytes(&BorshDeserialize::deserialize(buf)?)).ok_or_else(|| Error::from(ErrorKind::InvalidData))
 }
