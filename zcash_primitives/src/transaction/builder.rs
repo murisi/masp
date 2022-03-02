@@ -7,6 +7,8 @@ use rand::{rngs::OsRng, seq::SliceRandom, CryptoRng, RngCore};
 use std::error;
 use std::fmt;
 use std::marker::PhantomData;
+#[cfg(feature = "transparent-inputs")]
+pub use secp256k1;
 
 use crate::{
     consensus,
