@@ -57,10 +57,18 @@ impl ProofGenerationKey {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct ViewingKey {
     pub ak: jubjub::SubgroupPoint,
     pub nk: jubjub::SubgroupPoint,
+}
+
+impl Hash for ViewingKey {
+    fn hash<H>(&self, state: &mut H)
+    where H: Hasher {
+        self.ak.to_bytes().hash(state);
+        self.nk.to_bytes().hash(state);
+    }
 }
 
 impl ViewingKey {
@@ -111,7 +119,7 @@ impl Diversifier {
 ///
 /// `pk_d` is guaranteed to be prime-order (i.e. in the prime-order subgroup of Jubjub,
 /// and not the identity).
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PaymentAddress {
     pk_d: jubjub::SubgroupPoint,
     diversifier: Diversifier,
@@ -252,7 +260,7 @@ pub enum Rseed {
     AfterZip212([u8; 32]),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Note {
     /// The value of the note
     pub value: u64,
