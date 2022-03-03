@@ -8,6 +8,7 @@ use byteorder::{ByteOrder, LittleEndian, ReadBytesExt, WriteBytesExt};
 use fpe::ff1::{BinaryNumeralString, FF1};
 use std::ops::AddAssign;
 use std::str::FromStr;
+use std::io::{Error, ErrorKind};
 
 use crate::{
     constants::{PROOF_GENERATION_KEY_GENERATOR, SPENDING_KEY_GENERATOR},
@@ -344,13 +345,8 @@ impl ExtendedSpendingKey {
 impl FromStr for ExtendedSpendingKey {
     type Err = std::io::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut bytes = s.as_bytes();
-        let esk = Self::read(&mut bytes)?;
-        if bytes.len() == 0 {
-            Ok(esk)
-        } else {
-            Err(Self::Err::from(std::io::ErrorKind::InvalidData))
-        }
+        let vec = hex::decode(s).map_err(|x| Error::new(ErrorKind::InvalidData, x))?;
+        Ok(ExtendedSpendingKey::master(vec.as_ref()))
     }
 }
 
