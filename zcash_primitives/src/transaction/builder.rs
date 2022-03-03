@@ -9,6 +9,8 @@ use std::fmt;
 use std::marker::PhantomData;
 #[cfg(feature = "transparent-inputs")]
 pub use secp256k1;
+#[cfg(feature = "transparent-inputs")]
+pub use ripemd160;
 
 use crate::{
     consensus,
