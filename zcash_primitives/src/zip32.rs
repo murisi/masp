@@ -50,7 +50,7 @@ impl From<&FullViewingKey> for FVKFingerprint {
 }
 
 /// A Sapling full viewing key tag
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct FVKTag([u8; 4]);
 
 impl FVKFingerprint {
@@ -68,7 +68,7 @@ impl FVKTag {
 }
 
 /// A child index for a derived key
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ChildIndex {
     NonHardened(u32),
     Hardened(u32), // Hardened(n) == n + (1 << 31) == n' in path notation
@@ -95,7 +95,7 @@ impl ChildIndex {
 }
 
 /// A chain code
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct ChainCode([u8; 32]);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -120,7 +120,7 @@ impl DiversifierIndex {
 }
 
 /// A key used to derive diversifiers for a particular child key
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct DiversifierKey(pub [u8; 32]);
 
 impl DiversifierKey {
@@ -167,7 +167,7 @@ impl DiversifierKey {
 }
 
 /// A Sapling extended spending key
-#[derive(Clone)]
+#[derive(Clone, Eq, Hash)]
 pub struct ExtendedSpendingKey {
     depth: u8,
     parent_fvk_tag: FVKTag,
