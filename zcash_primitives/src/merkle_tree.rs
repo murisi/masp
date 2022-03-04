@@ -55,6 +55,12 @@ pub struct CommitmentTree<Node: Hashable> {
     parents: Vec<Option<Node>>,
 }
 
+impl<Node: Hashable> Default for CommitmentTree<Node> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<Node: Hashable> CommitmentTree<Node> {
     /// Creates an empty tree.
     pub fn new() -> Self {
