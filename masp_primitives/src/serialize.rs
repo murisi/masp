@@ -6,7 +6,7 @@ const MAX_SIZE: usize = 0x02000000;
 struct CompactSize;
 
 impl CompactSize {
-    fn read<R: Read>(mut reader: R) -> io::Result<usize> {
+    fn read<R: Read>(reader: &mut R) -> io::Result<usize> {
         let flag = reader.read_u8()?;
         match if flag < 253 {
             Ok(flag as usize)
@@ -43,7 +43,7 @@ impl CompactSize {
         }
     }
 
-    fn write<W: Write>(mut writer: W, size: usize) -> io::Result<()> {
+    fn write<W: Write>(writer: &mut W, size: usize) -> io::Result<()> {
         match size {
             s if s < 253 => writer.write_u8(s as u8),
             s if s <= 0xFFFF => {
@@ -65,33 +65,33 @@ impl CompactSize {
 pub struct Vector;
 
 impl Vector {
-    pub fn read<R: Read, E, F>(mut reader: R, func: F) -> io::Result<Vec<E>>
+    pub fn read<R: Read, E, F>(reader: &mut R, func: F) -> io::Result<Vec<E>>
     where
         F: Fn(&mut R) -> io::Result<E>,
     {
-        let count = CompactSize::read(&mut reader)?;
-        (0..count).map(|_| func(&mut reader)).collect()
+        let count = CompactSize::read(reader)?;
+        (0..count).map(|_| func(reader)).collect()
     }
 
-    pub fn write<W: Write, E, F>(mut writer: W, vec: &[E], func: F) -> io::Result<()>
+    pub fn write<W: Write, E, F>(writer: &mut W, vec: &[E], func: F) -> io::Result<()>
     where
         F: Fn(&mut W, &E) -> io::Result<()>,
     {
-        CompactSize::write(&mut writer, vec.len())?;
-        vec.iter().map(|e| func(&mut writer, e)).collect()
+        CompactSize::write(writer, vec.len())?;
+        vec.iter().map(|e| func(writer, e)).collect()
     }
 }
 
 pub struct Optional;
 
 impl Optional {
-    pub fn read<R: Read, T, F>(mut reader: R, func: F) -> io::Result<Option<T>>
+    pub fn read<R: Read, T, F>(reader: &mut R, func: F) -> io::Result<Option<T>>
     where
         F: Fn(&mut R) -> io::Result<T>,
     {
         match reader.read_u8()? {
             0 => Ok(None),
-            1 => Ok(Some(func(&mut reader)?)),
+            1 => Ok(Some(func(reader)?)),
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "non-canonical Option<T>",
@@ -99,7 +99,7 @@ impl Optional {
         }
     }
 
-    pub fn write<W: Write, T, F>(mut writer: W, val: &Option<T>, func: F) -> io::Result<()>
+    pub fn write<W: Write, T, F>(writer: &mut W, val: &Option<T>, func: F) -> io::Result<()>
     where
         F: Fn(&mut W, &T) -> io::Result<()>,
     {
@@ -107,7 +107,7 @@ impl Optional {
             None => writer.write_u8(0),
             Some(e) => {
                 writer.write_u8(1)?;
-                func(&mut writer, e)
+                func(writer, e)
             }
         }
     }
@@ -124,7 +124,8 @@ mod tests {
                 let mut data = vec![];
                 CompactSize::write(&mut data, $value).unwrap();
                 assert_eq!(&data[..], &$expected[..]);
-                match CompactSize::read(&data[..]) {
+                let mut rdr = &data[..];
+                match CompactSize::read(&mut rdr) {
                     Ok(n) => assert_eq!(n, $value),
                     Err(e) => panic!("Unexpected error: {:?}", e),
                 }
@@ -151,7 +152,8 @@ mod tests {
             let mut data = vec![];
             CompactSize::write(&mut data, value).unwrap();
             assert_eq!(&data[..], encoded);
-            assert!(CompactSize::read(encoded).is_err());
+            let mut rdr = encoded;
+            assert!(CompactSize::read(&mut rdr).is_err());
         }
     }
 
@@ -162,7 +164,8 @@ mod tests {
                 let mut data = vec![];
                 Vector::write(&mut data, &$value, |w, e| w.write_u8(*e)).unwrap();
                 assert_eq!(&data[..], &$expected[..]);
-                match Vector::read(&data[..], |r| r.read_u8()) {
+                let mut rdr = &data[..];
+                match Vector::read(&mut rdr, |r| r.read_u8()) {
                     Ok(v) => assert_eq!(v, $value),
                     Err(e) => panic!("Unexpected error: {:?}", e),
                 }
@@ -192,7 +195,8 @@ mod tests {
                 let mut data = vec![];
                 Optional::write(&mut data, &$value, $write).unwrap();
                 assert_eq!(&data[..], &$expected[..]);
-                match Optional::read(&data[..], $read) {
+                let mut rdr = &data[..];
+                match Optional::read(&mut rdr, $read) {
                     Ok(v) => assert_eq!(v, $value),
                     Err(e) => panic!("Unexpected error: {:?}", e),
                 }

@@ -7,9 +7,9 @@ use rand::{rngs::OsRng, seq::SliceRandom, CryptoRng, RngCore};
 use std::error;
 use std::fmt;
 use std::marker::PhantomData;
-use std::iter::FromIterator;
+use crate::transaction::AssetType;
 use std::collections::BTreeMap;
-use crate::asset_type::AssetType;
+use crate::transaction::components::amount::ZEC;
 #[cfg(feature = "transparent-inputs")]
 pub use secp256k1;
 #[cfg(feature = "transparent-inputs")]
@@ -47,7 +47,7 @@ const MIN_SHIELDED_OUTPUTS: usize = 2;
 pub enum Error {
     AnchorMismatch,
     BindingSig,
-    ChangeIsNegative(AssetType, Amount),
+    ChangeIsNegative(Amount),
     InvalidAddress,
     InvalidAmount,
     NoChangeAddress,
@@ -61,8 +61,8 @@ impl fmt::Display for Error {
                 write!(f, "Anchor mismatch (anchors for all spends must be equal)")
             }
             Error::BindingSig => write!(f, "Failed to create bindingSig"),
-            Error::ChangeIsNegative(asset_type, amount) => {
-                write!(f, "Change is negative ({:?} {:?})", amount, asset_type)
+            Error::ChangeIsNegative(amount) => {
+                write!(f, "Change is negative ({:?} zatoshis)", amount)
             }
             Error::InvalidAddress => write!(f, "Invalid address"),
             Error::InvalidAmount => write!(f, "Invalid amount"),
@@ -97,24 +97,21 @@ impl SaplingOutput {
         ovk: Option<OutgoingViewingKey>,
         to: PaymentAddress,
         asset_type: AssetType,
-        value: Amount,
+        value: u64,
         memo: Option<Memo>,
     ) -> Result<Self, Error> {
         let g_d = match to.g_d() {
             Some(g_d) => g_d,
             None => return Err(Error::InvalidAddress),
         };
-        if value.is_negative() {
-            return Err(Error::InvalidAmount);
-        }
 
         let rseed = generate_random_rseed::<P, R>(height, rng);
 
         let note = Note {
             g_d,
-            asset_type,
             pk_d: to.pk_d().clone(),
-            value: value.into(),
+            asset_type,
+            value,
             rseed,
         };
 
@@ -203,7 +200,7 @@ impl TransparentInputs {
         utxo: OutPoint,
         coin: TxOut,
     ) -> Result<(), Error> {
-        if coin.value.is_negative() {
+        if coin.value < 0 {
             return Err(Error::InvalidAmount);
         }
 
@@ -226,17 +223,19 @@ impl TransparentInputs {
         Ok(())
     }
 
-    fn value_sum(&self) -> BTreeMap<AssetType, Amount> {
-        let sum = BTreeMap::new();
+    fn value_sum(&self) -> Amount {
         #[cfg(feature = "transparent-inputs")]
         {
-            for input in self.inputs {
-                sum.entry(input.coin.asset_type).or_insert(Amount::zero());
-                sum[&input.coin.asset_type] += input.coin.value;
-            }
+            self.inputs
+                .iter()
+                .map(|input| Amount::from_u64(input.coin.asset_type, input.coin.value).unwrap())
+                .sum::<Amount>()
         }
 
-        sum
+        #[cfg(not(feature = "transparent-inputs"))]
+        {
+            Amount::zero()
+        }
     }
 
     #[cfg(feature = "transparent-inputs")]
@@ -251,7 +250,7 @@ impl TransparentInputs {
                 mtx,
                 consensus_branch_id,
                 SIGHASH_ALL,
-                Some((i, &info.coin.script_pubkey, info.coin.value)),
+                Some((i, &info.coin.script_pubkey, info.coin.asset_type, info.coin.value)),
             ));
 
             let msg = secp256k1::Message::from_slice(&sighash).expect("32 bytes");
@@ -313,7 +312,7 @@ pub struct Builder<P: consensus::Parameters, R: RngCore + CryptoRng> {
     rng: R,
     height: u32,
     mtx: TransactionData,
-    fee: BTreeMap<AssetType, Amount>,
+    fee: Amount,
     anchor: Option<bls12_381::Scalar>,
     spends: Vec<SpendDescriptionInfo>,
     outputs: Vec<SaplingOutput>,
@@ -355,7 +354,7 @@ impl<P: consensus::Parameters, R: RngCore + CryptoRng> Builder<P, R> {
             rng,
             height,
             mtx,
-            fee: DEFAULT_FEE,
+            fee: DEFAULT_FEE(),
             anchor: None,
             spends: vec![],
             outputs: vec![],
@@ -366,8 +365,8 @@ impl<P: consensus::Parameters, R: RngCore + CryptoRng> Builder<P, R> {
     }
 
     /// Sets the fee used in this transaction
-    pub fn set_fee(&mut self, value: BTreeMap<AssetType, Amount>) -> Result<(), Error> {
-        if value.values().any(|x| x.is_negative()) {
+    pub fn set_fee(&mut self, value: Amount) -> Result<(), Error> {
+        if value.has_negative() {
             Err(Error::InvalidAmount)
         } else {
             self.fee = value;
@@ -399,8 +398,7 @@ impl<P: consensus::Parameters, R: RngCore + CryptoRng> Builder<P, R> {
 
         let alpha = jubjub::Fr::random(&mut self.rng);
 
-        self.mtx.value_balance.entry(note.asset_type).or_insert(Amount::zero());
-        self.mtx.value_balance[&note.asset_type] += Amount::from_u64(note.value).map_err(|_| Error::InvalidAmount)?;
+        self.mtx.value_balance += Amount::from_u64(note.asset_type, note.value).map_err(|_| Error::InvalidAmount)?;
 
         self.spends.push(SpendDescriptionInfo {
             extsk,
@@ -419,13 +417,12 @@ impl<P: consensus::Parameters, R: RngCore + CryptoRng> Builder<P, R> {
         ovk: Option<OutgoingViewingKey>,
         to: PaymentAddress,
         asset_type: AssetType,
-        value: Amount,
+        value: u64,
         memo: Option<Memo>,
     ) -> Result<(), Error> {
         let output = SaplingOutput::new::<R, P>(self.height, &mut self.rng, ovk, to, asset_type, value, memo)?;
 
-        self.mtx.value_balance.entry(asset_type).or_insert(Amount::zero());
-        self.mtx.value_balance[&asset_type] -= value;
+        self.mtx.value_balance -= Amount::from_u64(asset_type, value).map_err(|_| Error::InvalidAmount)?;
 
         self.outputs.push(output);
 
@@ -449,12 +446,8 @@ impl<P: consensus::Parameters, R: RngCore + CryptoRng> Builder<P, R> {
         &mut self,
         to: &TransparentAddress,
         asset_type: AssetType,
-        value: Amount,
+        value: u64,
     ) -> Result<(), Error> {
-        if value.is_negative() {
-            return Err(Error::InvalidAmount);
-        }
-
         self.mtx.vout.push(TxOut {
             asset_type,
             value,
@@ -493,31 +486,23 @@ impl<P: consensus::Parameters, R: RngCore + CryptoRng> Builder<P, R> {
         //
 
         // Valid change
-        let mut change = self.mtx.value_balance;
-        for (asset_type, amt) in self.fee {
-            change.entry(asset_type).or_insert(Amount::zero());
-            change[&asset_type] -= amt;
-        }
-        for (asset_type, amt) in self.transparent_inputs.value_sum() {
-            change.entry(asset_type).or_insert(Amount::zero());
-            change[&asset_type] += amt;
-        }
-        for out in self.mtx.vout {
-            change.entry(out.asset_type).or_insert(Amount::zero());
-            change[&out.asset_type] -= out.value;
-        }
-        for (change_type, change_amt) in change {
-            if change_amt.is_negative() {
-                return Err(Error::ChangeIsNegative(change_type, change_amt));
-            }
+        let change = self.mtx.value_balance.clone() - self.fee.clone() + self.transparent_inputs.value_sum()
+            - self
+                .mtx
+                .vout
+                .iter()
+                .map(|output| Amount::from_u64(output.asset_type, output.value).unwrap())
+                .sum::<Amount>();
+        if change.has_negative() {
+            return Err(Error::ChangeIsNegative(change));
         }
 
         //
         // Change output
         //
 
-        for (change_type, change_amt) in change {
-            if change_amt.is_positive() {
+        for (change_type, change_amt) in BTreeMap::<AssetType, u64>::from(change) {
+            if change_amt > 0 {
                 // Send change to the specified change address. If no change address
                 // was set, send change to the first Sapling address given as input.
                 let change_address = if let Some(change_address) = self.change_address.take() {
@@ -656,6 +641,7 @@ impl<P: consensus::Parameters, R: RngCore + CryptoRng> Builder<P, R> {
                             pk_d,
                             rseed,
                             value: 0,
+                            asset_type: ZEC(),
                         },
                     )
                 };
@@ -720,13 +706,7 @@ impl<P: consensus::Parameters, R: RngCore + CryptoRng> Builder<P, R> {
                 prover
                     .binding_sig(
                         &mut ctx,
-                        &Vec::from_iter(
-                            self
-                                .mtx
-                                .value_balance
-                                .into_iter()
-                                .map(|(k,v)| (k, v.into()))
-                        ).as_ref(),
+                        Vec::<(AssetType, i64)>::from(self.mtx.value_balance.clone()).as_ref(),
                         &sighash
                     )
                     .map_err(|()| Error::BindingSig)?,
@@ -751,6 +731,7 @@ mod tests {
     use ff::{Field, PrimeField};
     use rand_core::OsRng;
     use std::marker::PhantomData;
+    use crate::transaction::components::amount::ZEC;
 
     use super::{Builder, Error};
     use crate::{
@@ -764,7 +745,6 @@ mod tests {
         transaction::components::Amount,
         zip32::{ExtendedFullViewingKey, ExtendedSpendingKey},
     };
-    use crate::transaction::builder::AssetType;
 
     #[test]
     fn fails_on_negative_output() {
@@ -774,9 +754,8 @@ mod tests {
         let to = extfvk.default_address().unwrap().1;
 
         let mut builder = Builder::<TestNetwork, OsRng>::new(0);
-        let asset_type = AssetType::new("BTC".as_bytes()).unwrap();
         assert_eq!(
-            builder.add_sapling_output(Some(ovk), to, asset_type, Amount::from_i64(-1).unwrap(), None),
+            builder.add_sapling_output(Some(ovk), to, ZEC(), 0, None),
             Err(Error::InvalidAmount)
         );
     }
@@ -808,7 +787,7 @@ mod tests {
 
         // Create a tx with only t output. No binding_sig should be present
         builder
-            .add_transparent_output(&TransparentAddress::PublicKey([0; 20]), Amount::zero())
+            .add_transparent_output(&TransparentAddress::PublicKey([0; 20]), ZEC(), 0)
             .unwrap();
 
         let (tx, _) = builder
@@ -826,9 +805,8 @@ mod tests {
 
         let mut rng = OsRng;
 
-        let note1_type = AssetType::new("BTC".as_bytes()).unwrap();
         let note1 = to
-            .create_note(note1_type, 50000, Rseed::BeforeZip212(jubjub::Fr::random(&mut rng)))
+            .create_note(ZEC(), 50000, Rseed::BeforeZip212(jubjub::Fr::random(&mut rng)))
             .unwrap();
         let cmu1 = Node::new(note1.cmu().to_repr());
         let mut tree = CommitmentTree::new();
@@ -848,7 +826,7 @@ mod tests {
             .unwrap();
 
         builder
-            .add_transparent_output(&TransparentAddress::PublicKey([0; 20]), Amount::zero())
+            .add_transparent_output(&TransparentAddress::PublicKey([0; 20]), ZEC(), 0)
             .unwrap();
 
         // Expect a binding signature error, because our inputs aren't valid, but this shows
@@ -859,17 +837,18 @@ mod tests {
         );
     }
 
-    #[test]
+    /*#[test]
     fn fails_on_negative_transparent_output() {
         let mut builder = Builder::<TestNetwork, OsRng>::new(0);
         assert_eq!(
             builder.add_transparent_output(
                 &TransparentAddress::PublicKey([0; 20]),
-                Amount::from_i64(-1).unwrap(),
+                ZEC,
+                -1,
             ),
             Err(Error::InvalidAmount)
         );
-    }
+    }*/
 
     #[test]
     fn fails_on_negative_change() {
@@ -884,7 +863,7 @@ mod tests {
             let builder = Builder::<TestNetwork, OsRng>::new(0);
             assert_eq!(
                 builder.build(consensus::BranchId::Sapling, &MockTxProver),
-                Err(Error::ChangeIsNegative(Amount::from_i64(-10000).unwrap()))
+                Err(Error::ChangeIsNegative(Amount::from_i64(ZEC(), -10000).unwrap()))
             );
         }
 
@@ -900,14 +879,14 @@ mod tests {
                 .add_sapling_output(
                     ovk.clone(),
                     to.clone(),
-                    AssetType::new("BTC".as_bytes()).unwrap(),
-                    Amount::from_u64(50000).unwrap(),
+                    ZEC(),
+                    50000,
                     None,
                 )
                 .unwrap();
             assert_eq!(
                 builder.build(consensus::BranchId::Sapling, &MockTxProver),
-                Err(Error::ChangeIsNegative(Amount::from_i64(-60000).unwrap()))
+                Err(Error::ChangeIsNegative(Amount::from_i64(ZEC(), -60000).unwrap()))
             );
         }
 
@@ -918,18 +897,18 @@ mod tests {
             builder
                 .add_transparent_output(
                     &TransparentAddress::PublicKey([0; 20]),
-                    Amount::from_u64(50000).unwrap(),
+                    ZEC(),
+                    50000,
                 )
                 .unwrap();
             assert_eq!(
                 builder.build(consensus::BranchId::Sapling, &MockTxProver),
-                Err(Error::ChangeIsNegative(Amount::from_i64(-60000).unwrap()))
+                Err(Error::ChangeIsNegative(Amount::from_i64(ZEC(), -60000).unwrap()))
             );
         }
 
-        let note1_type = AssetType::new("BTC".as_bytes()).unwrap();
         let note1 = to
-            .create_note(note1_type, 59999, Rseed::BeforeZip212(jubjub::Fr::random(&mut rng)))
+            .create_note(ZEC(), 59999, Rseed::BeforeZip212(jubjub::Fr::random(&mut rng)))
             .unwrap();
         let cmu1 = Node::new(note1.cmu().to_repr());
         let mut tree = CommitmentTree::new();
@@ -952,25 +931,26 @@ mod tests {
                 .add_sapling_output(
                     ovk.clone(),
                     to.clone(),
-                    AssetType::new("BTC".as_bytes()).unwrap(),
-                    Amount::from_u64(30000).unwrap(),
+                    ZEC(),
+                    30000,
                     None,
                 )
                 .unwrap();
             builder
                 .add_transparent_output(
                     &TransparentAddress::PublicKey([0; 20]),
-                    Amount::from_u64(20000).unwrap(),
+                    ZEC(),
+                    20000,
                 )
                 .unwrap();
             assert_eq!(
                 builder.build(consensus::BranchId::Sapling, &MockTxProver),
-                Err(Error::ChangeIsNegative(Amount::from_i64(-1).unwrap()))
+                Err(Error::ChangeIsNegative(Amount::from_i64(ZEC(), -1).unwrap()))
             );
         }
 
         let note2 = to
-            .create_note(AssetType::new("BTC".as_bytes()).unwrap(), 1, Rseed::BeforeZip212(jubjub::Fr::random(&mut rng)))
+            .create_note(ZEC(), 1, Rseed::BeforeZip212(jubjub::Fr::random(&mut rng)))
             .unwrap();
         let cmu2 = Node::new(note2.cmu().to_repr());
         tree.append(cmu2).unwrap();
@@ -996,13 +976,13 @@ mod tests {
                 .add_sapling_spend(extsk, *to.diversifier(), note2, witness2.path().unwrap())
                 .unwrap();
             builder
-                .add_sapling_output(ovk, to, AssetType::new("BTC".as_bytes()).unwrap(), Amount::from_u64(30000).unwrap(), None)
+                .add_sapling_output(ovk, to, ZEC(), 30000, None)
                 .unwrap();
             builder
                 .add_transparent_output(
                     &TransparentAddress::PublicKey([0; 20]),
-                    AssetType::new("BTC".as_bytes()).unwrap(),
-                    Amount::from_u64(20000).unwrap(),
+                    ZEC(),
+                    20000,
                 )
                 .unwrap();
             assert_eq!(

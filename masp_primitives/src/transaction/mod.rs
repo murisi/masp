@@ -8,8 +8,6 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 use std::io::{self, Read, Write};
 use std::ops::Deref;
-use std::collections::BTreeMap;
-use std::iter::FromIterator;
 
 use crate::redjubjub::Signature;
 use crate::serialize::Vector;
@@ -86,7 +84,7 @@ pub struct TransactionData {
     pub vout: Vec<TxOut>,
     pub lock_time: u32,
     pub expiry_height: u32,
-    pub value_balance: BTreeMap<AssetType, Amount>,
+    pub value_balance: Amount,
     pub shielded_spends: Vec<SpendDescription>,
     pub shielded_outputs: Vec<OutputDescription>,
     pub joinsplits: Vec<JSDescription>,
@@ -142,7 +140,7 @@ impl TransactionData {
             vout: vec![],
             lock_time: 0,
             expiry_height: 0,
-            value_balance: BTreeMap::new(),
+            value_balance: Amount::zero(),
             shielded_spends: vec![],
             shielded_outputs: vec![],
             joinsplits: vec![],
@@ -183,7 +181,7 @@ impl Transaction {
         self.txid
     }
 
-    pub fn read<R: Read>(mut reader: R) -> io::Result<Self> {
+    pub fn read<R: Read>(reader: &mut R) -> io::Result<Self> {
         let header = reader.read_u32::<LittleEndian>()?;
         let overwintered = (header >> 31) == 1;
         let version = header & 0x7FFFFFFF;
@@ -207,8 +205,8 @@ impl Transaction {
             ));
         }
 
-        let vin = Vector::read(&mut reader, TxIn::read)?;
-        let vout = Vector::read(&mut reader, TxOut::read)?;
+        let vin = Vector::read(reader, TxIn::read)?;
+        let vout = Vector::read(reader, TxOut::read)?;
         let lock_time = reader.read_u32::<LittleEndian>()?;
         let expiry_height = if is_overwinter_v3 || is_sapling_v4 {
             reader.read_u32::<LittleEndian>()?
@@ -217,24 +215,17 @@ impl Transaction {
         };
 
         let (value_balance, shielded_spends, shielded_outputs) = if is_sapling_v4 {
-            let vb = Vector::read(&mut reader, |r| {
-                let mut tmp_type = [0; 32];
-                let mut tmp_val = [0; 8];
-                reader.read_exact(&mut tmp_type)?;
-                reader.read_exact(&mut tmp_val)?;
-                let asset_type = AssetType::from_identifier(&tmp_type).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid AssetType"))?;
-                let amount = Amount::from_i64_le_bytes(tmp_val).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "valueBalance out of range"))?;
-                Ok((asset_type, amount))
-            })?;
-            let ss = Vector::read(&mut reader, SpendDescription::read)?;
-            let so = Vector::read(&mut reader, OutputDescription::read)?;
-            (vb.into_iter().collect(), ss, so)
+            let vb = Amount::read(reader)
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "valueBalance out of range"))?;
+            let ss = Vector::read(reader, SpendDescription::read)?;
+            let so = Vector::read(reader, OutputDescription::read)?;
+            (vb, ss, so)
         } else {
-            (BTreeMap::new(), vec![], vec![])
+            (Amount::zero(), vec![], vec![])
         };
 
         let (joinsplits, joinsplit_pubkey, joinsplit_sig) = if version >= 2 {
-            let jss = Vector::read(&mut reader, |r| {
+            let jss = Vector::read(reader, |r| {
                 JSDescription::read(r, overwintered && version >= SAPLING_TX_VERSION)
             })?;
             let (pubkey, sig) = if !jss.is_empty() {
@@ -253,7 +244,7 @@ impl Transaction {
 
         let binding_sig =
             if is_sapling_v4 && !(shielded_spends.is_empty() && shielded_outputs.is_empty()) {
-                Some(Signature::read(&mut reader)?)
+                Some(Signature::read(reader)?)
             } else {
                 None
             };
@@ -276,7 +267,7 @@ impl Transaction {
         })
     }
 
-    pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
+    pub fn write<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_u32::<LittleEndian>(self.header())?;
         if self.overwintered {
             writer.write_u32::<LittleEndian>(self.version_group_id)?;
@@ -295,29 +286,21 @@ impl Transaction {
             ));
         }
 
-        Vector::write(&mut writer, &self.vin, |w, e| e.write(w))?;
-        Vector::write(&mut writer, &self.vout, |w, e| e.write(w))?;
+        Vector::write(writer, &self.vin, |w, e| e.write(w))?;
+        Vector::write(writer, &self.vout, |w, e| e.write(w))?;
         writer.write_u32::<LittleEndian>(self.lock_time)?;
         if is_overwinter_v3 || is_sapling_v4 {
             writer.write_u32::<LittleEndian>(self.expiry_height)?;
         }
 
         if is_sapling_v4 {
-            Vector::write(
-                &mut writer,
-                Vec::from_iter(self.value_balance.iter()).as_ref(),
-                |w, e| {
-                    w.write_all(e.0.get_identifier())?;
-                    w.write_all(&e.1.to_i64_le_bytes())?;
-                    Ok(())
-                }
-            )?;
-            Vector::write(&mut writer, &self.shielded_spends, |w, e| e.write(w))?;
-            Vector::write(&mut writer, &self.shielded_outputs, |w, e| e.write(w))?;
+            self.value_balance.write(writer);
+            Vector::write(writer, &self.shielded_spends, |w, e| e.write(w))?;
+            Vector::write(writer, &self.shielded_outputs, |w, e| e.write(w))?;
         }
 
         if self.version >= 2 {
-            Vector::write(&mut writer, &self.joinsplits, |w, e| e.write(w))?;
+            Vector::write(writer, &self.joinsplits, |w, e| e.write(w))?;
             if !self.joinsplits.is_empty() {
                 match self.joinsplit_pubkey {
                     Some(pubkey) => writer.write_all(&pubkey)?,
@@ -357,7 +340,7 @@ impl Transaction {
 
         if is_sapling_v4 && !(self.shielded_spends.is_empty() && self.shielded_outputs.is_empty()) {
             match self.binding_sig {
-                Some(sig) => sig.write(&mut writer)?,
+                Some(sig) => sig.write(writer)?,
                 None => {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidInput,

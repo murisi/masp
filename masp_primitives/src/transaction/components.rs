@@ -12,6 +12,7 @@ use std::io::{self, Read, Write};
 use std::hash::Hasher;
 use std::hash::Hash;
 use std::cmp::Ordering;
+use crate::transaction::AssetType;
 
 use crate::legacy::Script;
 use crate::redjubjub::{PublicKey, Signature};
@@ -99,28 +100,36 @@ impl TxIn {
 
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize, Serialize, Deserialize, Hash, PartialOrd, PartialEq, Ord, Eq)]
 pub struct TxOut {
-    pub value: Amount,
+    pub asset_type: AssetType,
+    pub value: u64,
     pub script_pubkey: Script,
 }
 
 impl TxOut {
     pub fn read<R: Read>(mut reader: &mut R) -> io::Result<Self> {
+        let asset_type = {
+            let mut tmp = [0u8; 32];
+            reader.read_exact(&mut tmp)?;
+            AssetType::from_identifier(&tmp)
+        }
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "value out of range"))?;
         let value = {
             let mut tmp = [0u8; 8];
             reader.read_exact(&mut tmp)?;
-            Amount::from_nonnegative_i64_le_bytes(tmp)
-        }
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "value out of range"))?;
+            u64::from_le_bytes(tmp)
+        };
         let script_pubkey = Script::read(&mut reader)?;
 
         Ok(TxOut {
+            asset_type,
             value,
             script_pubkey,
         })
     }
 
     pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
-        writer.write_all(&self.value.to_i64_le_bytes())?;
+        writer.write_all(self.asset_type.get_identifier())?;
+        writer.write_all(&self.value.to_le_bytes())?;
         self.script_pubkey.write(&mut writer)
     }
 }
@@ -279,9 +288,9 @@ pub struct OutputDescription {
     #[serde(serialize_with = "sserialize_extended_point")]
     #[serde(deserialize_with = "sdeserialize_extended_point")]
     pub ephemeral_key: jubjub::ExtendedPoint,
-    #[serde(serialize_with = "sserialize_array::<_, u8, u8, 580>")]
-    #[serde(deserialize_with = "sdeserialize_array::<_, u8, u8, 580>")]
-    pub enc_ciphertext: [u8; 580],
+    #[serde(serialize_with = "sserialize_array::<_, u8, u8, 612>")]
+    #[serde(deserialize_with = "sdeserialize_array::<_, u8, u8, 612>")]
+    pub enc_ciphertext: [u8; 612],
     #[serde(serialize_with = "sserialize_array::<_, u8, u8, 80>")]
     #[serde(deserialize_with = "sdeserialize_array::<_, u8, u8, 80>")]
     pub out_ciphertext: [u8; 80],
@@ -392,7 +401,7 @@ impl OutputDescription {
             ephemeral_key.unwrap()
         };
 
-        let mut enc_ciphertext = [0u8; 580];
+        let mut enc_ciphertext = [0u8; 612];
         let mut out_ciphertext = [0u8; 80];
         reader.read_exact(&mut enc_ciphertext)?;
         reader.read_exact(&mut out_ciphertext)?;
@@ -572,22 +581,14 @@ impl std::fmt::Debug for JSDescription {
 }
 
 impl JSDescription {
-    pub fn read<R: Read>(mut reader: R, use_groth: bool) -> io::Result<Self> {
+    pub fn read<R: Read>(reader: &mut R, use_groth: bool) -> io::Result<Self> {
         // Consensus rule (§4.3): Canonical encoding is enforced here
-        let vpub_old = {
-            let mut tmp = [0u8; 8];
-            reader.read_exact(&mut tmp)?;
-            Amount::from_u64_le_bytes(tmp)
-        }
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "vpub_old out of range"))?;
+        let vpub_old = Amount::read(reader)
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "vpub_old out of range"))?;
 
         // Consensus rule (§4.3): Canonical encoding is enforced here
-        let vpub_new = {
-            let mut tmp = [0u8; 8];
-            reader.read_exact(&mut tmp)?;
-            Amount::from_u64_le_bytes(tmp)
-        }
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "vpub_new out of range"))?;
+        let vpub_new = Amount::read(reader)
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "vpub_new out of range"))?;
 
         // Consensus rule (§4.3): One of vpub_old and vpub_new being zero is
         // enforced by CheckTransactionWithoutProofVerification() in zcashd.
@@ -656,9 +657,9 @@ impl JSDescription {
         })
     }
 
-    pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
-        writer.write_all(&self.vpub_old.to_i64_le_bytes())?;
-        writer.write_all(&self.vpub_new.to_i64_le_bytes())?;
+    pub fn write<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+        self.vpub_old.write(writer)?;
+        self.vpub_new.write(writer)?;
         writer.write_all(&self.anchor)?;
         writer.write_all(&self.nullifiers[0])?;
         writer.write_all(&self.nullifiers[1])?;

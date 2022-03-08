@@ -2,9 +2,10 @@ use blake2b_simd::{Hash as Blake2bHash, Params as Blake2bParams};
 use byteorder::{LittleEndian, WriteBytesExt};
 use ff::PrimeField;
 use group::GroupEncoding;
+use crate::transaction::AssetType;
 
 use super::{
-    components::{Amount, TxOut},
+    components::TxOut,
     Transaction, TransactionData, OVERWINTER_VERSION_GROUP_ID, SAPLING_TX_VERSION,
     SAPLING_VERSION_GROUP_ID,
 };
@@ -155,7 +156,7 @@ pub fn signature_hash_data(
     tx: &TransactionData,
     consensus_branch_id: consensus::BranchId,
     hash_type: u32,
-    transparent_input: Option<(usize, &Script, Amount)>,
+    transparent_input: Option<(usize, &Script, AssetType, u64)>,
 ) -> Vec<u8> {
     let sigversion = SigHashVersion::from_tx(tx);
     match sigversion {
@@ -208,15 +209,18 @@ pub fn signature_hash_data(
             update_u32!(h, tx.lock_time, tmp);
             update_u32!(h, tx.expiry_height, tmp);
             if sigversion == SigHashVersion::Sapling {
-                h.update(&tx.value_balance.to_i64_le_bytes());
+                let mut bytes = Vec::new();
+                tx.value_balance.write(&mut bytes);
+                h.update(bytes.as_ref());
             }
             update_u32!(h, hash_type, tmp);
 
-            if let Some((n, script_code, amount)) = transparent_input {
+            if let Some((n, script_code, atype, value)) = transparent_input {
                 let mut data = vec![];
                 tx.vin[n].prevout.write(&mut data).unwrap();
                 script_code.write(&mut data).unwrap();
-                data.extend_from_slice(&amount.to_i64_le_bytes());
+                data.extend_from_slice(atype.get_identifier());
+                data.extend_from_slice(value.to_le_bytes().as_ref());
                 (&mut data)
                     .write_u32::<LittleEndian>(tx.vin[n].sequence)
                     .unwrap();
@@ -233,7 +237,7 @@ pub fn signature_hash(
     tx: &Transaction,
     consensus_branch_id: consensus::BranchId,
     hash_type: u32,
-    transparent_input: Option<(usize, &Script, Amount)>,
+    transparent_input: Option<(usize, &Script, AssetType, u64)>,
 ) -> Vec<u8> {
     signature_hash_data(tx, consensus_branch_id, hash_type, transparent_input)
 }
