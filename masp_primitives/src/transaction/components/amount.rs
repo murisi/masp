@@ -81,52 +81,12 @@ impl Amount {
         }
     }
 
-    /// Reads an Amount from a signed 64-bit little-endian integer.
-    ///
-    /// Returns an error if the amount is outside the range `{-MAX_MONEY..MAX_MONEY}`.
-    /*pub fn from_i64_le_bytes(bytes: [u8; 40]) -> Result<Self, ()> {
-        let atype = AssetType::from_identifier(&bytes[..32].try_into().unwrap()).ok_or(())?;
-        let amount = i64::from_le_bytes(bytes[32..].try_into().unwrap());
-        Amount::from_i64(atype, amount)
-    }
-
-    /// Reads a non-negative Amount from a signed 64-bit little-endian integer.
-    ///
-    /// Returns an error if the amount is outside the range `{0..MAX_MONEY}`.
-    pub fn from_nonnegative_i64_le_bytes(bytes: [u8; 40]) -> Result<Self, ()> {
-        let atype = AssetType::from_identifier(&bytes[..32].try_into().unwrap()).ok_or(())?;
-        let amount = i64::from_le_bytes(bytes[32..].try_into().unwrap());
-        Amount::from_nonnegative_i64(atype, amount)
-    }
-
-    /// Reads an Amount from an unsigned 64-bit little-endian integer.
-    ///
-    /// Returns an error if the amount is outside the range `{0..MAX_MONEY}`.
-    pub fn from_u64_le_bytes(bytes: [u8; 40]) -> Result<Self, ()> {
-        let atype = AssetType::from_identifier(&bytes[..32].try_into().unwrap()).ok_or(())?;
-        let amount = u64::from_le_bytes(bytes[32..].try_into().unwrap());
-        Amount::from_u64(atype, amount)
-    }
-
-    /// Returns the Amount encoded as a signed 64-bit little-endian integer.
-    pub fn to_i64_le_bytes(self) -> Result<[u8; 40], ()> {
-        if self.0.len() == 1 {
-            let (atype, amt) = self.0.iter().next().unwrap();
-            let mut ret = [0; 40];
-            ret[..32].copy_from_slice(atype.get_identifier());
-            ret[32..].copy_from_slice(amt.to_le_bytes().as_ref());
-            Ok(ret)
-        } else {
-            Err(())
-        }
-    }*/
-
     pub fn read<R: Read>(reader: &mut R) -> std::io::Result<Self> {
         let vec = Vector::read(reader, |reader| {
             let mut atype = [0; 32];
             let mut value = [0; 8];
-            reader.read_exact(&mut atype);
-            reader.read_exact(&mut value);
+            reader.read_exact(&mut atype)?;
+            reader.read_exact(&mut value)?;
             let atype = AssetType::from_identifier(&atype).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid asset type"))?;
             Ok((atype, i64::from_le_bytes(value)))
         })?;
@@ -148,7 +108,7 @@ impl Amount {
 
     /// Returns `true` if `self` is positive and `false` if the Amount is zero or
     /// negative.
-    pub fn is_positive(&self) -> bool {
+    pub fn has_positive(&self) -> bool {
         self.0.values().any(|x| x.is_positive())
     }
 
@@ -285,28 +245,28 @@ mod tests {
     #[test]
     #[should_panic]
     fn add_panics_on_overflow() {
-        let v = Amount::from_i64(ZEC, MAX_MONEY).unwrap();
-        let _sum = v + Amount::from_i64(ZEC, 1).unwrap();
+        let v = Amount::from_i64(ZEC(), MAX_MONEY).unwrap();
+        let _sum = v + Amount::from_i64(ZEC(), 1).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn add_assign_panics_on_overflow() {
-        let mut a = Amount::from_i64(ZEC, MAX_MONEY).unwrap();
-        a += Amount::from_i64(ZEC, 1).unwrap();
+        let mut a = Amount::from_i64(ZEC(), MAX_MONEY).unwrap();
+        a += Amount::from_i64(ZEC(), 1).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn sub_panics_on_underflow() {
-        let v = Amount::from_i64(ZEC, -MAX_MONEY).unwrap();
-        let _diff = v - Amount::from_i64(ZEC, 1).unwrap();
+        let v = Amount::from_i64(ZEC(), -MAX_MONEY).unwrap();
+        let _diff = v - Amount::from_i64(ZEC(), 1).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn sub_assign_panics_on_underflow() {
-        let mut a = Amount::from_i64(ZEC, -MAX_MONEY).unwrap();
-        a -= Amount::from_i64(ZEC, 1).unwrap();
+        let mut a = Amount::from_i64(ZEC(), -MAX_MONEY).unwrap();
+        a -= Amount::from_i64(ZEC(), 1).unwrap();
     }
 }

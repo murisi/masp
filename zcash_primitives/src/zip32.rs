@@ -566,12 +566,14 @@ mod tests {
 
         let mut ser = vec![];
         xsk.write(&mut ser).unwrap();
-        let xsk2 = ExtendedSpendingKey::read(&ser[..]).unwrap();
+        let mut rdr = &ser[..];
+        let xsk2 = ExtendedSpendingKey::read(&mut rdr).unwrap();
         assert_eq!(xsk2, xsk);
 
         let mut ser = vec![];
         fvk.write(&mut ser).unwrap();
-        let fvk2 = ExtendedFullViewingKey::read(&ser[..]).unwrap();
+        let mut rdr = &ser[..];
+        let fvk2 = ExtendedFullViewingKey::read(&mut rdr).unwrap();
         assert_eq!(fvk2, fvk);
     }
 

@@ -200,10 +200,6 @@ impl TransparentInputs {
         utxo: OutPoint,
         coin: TxOut,
     ) -> Result<(), Error> {
-        if coin.value < 0 {
-            return Err(Error::InvalidAmount);
-        }
-
         let pubkey = secp256k1::PublicKey::from_secret_key(&self.secp, &sk).serialize();
         match coin.script_pubkey.address() {
             Some(TransparentAddress::PublicKey(hash)) => {
@@ -746,7 +742,7 @@ mod tests {
         zip32::{ExtendedFullViewingKey, ExtendedSpendingKey},
     };
 
-    #[test]
+    /*#[test]
     fn fails_on_negative_output() {
         let extsk = ExtendedSpendingKey::master(&[]);
         let extfvk = ExtendedFullViewingKey::from(&extsk);
@@ -755,10 +751,10 @@ mod tests {
 
         let mut builder = Builder::<TestNetwork, OsRng>::new(0);
         assert_eq!(
-            builder.add_sapling_output(Some(ovk), to, ZEC(), 0, None),
+            builder.add_sapling_output(Some(ovk), to, ZEC(), -1, None),
             Err(Error::InvalidAmount)
         );
-    }
+    }*/
 
     #[test]
     fn binding_sig_absent_if_no_shielded_spend_or_output() {

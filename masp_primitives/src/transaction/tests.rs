@@ -7,7 +7,8 @@ use crate::{constants::SPENDING_KEY_GENERATOR, redjubjub::PrivateKey};
 #[test]
 fn tx_read_write() {
     let data = &self::data::tx_read_write::TX_READ_WRITE;
-    let tx = Transaction::read(&data[..]).unwrap();
+    let mut rdr = &data[..];
+    let tx = Transaction::read(&mut rdr).unwrap();
     assert_eq!(
         format!("{}", tx.txid()),
         "64f0bd7fe30ce23753358fe3a2dc835b8fba9c0274c4e2c54a6f73114cb55639"
@@ -65,12 +66,14 @@ mod data;
 #[test]
 fn zip_0143() {
     for tv in self::data::zip_0143::make_test_vectors() {
-        let tx = Transaction::read(&tv.tx[..]).unwrap();
+        let mut rdr = &tv.tx[..];
+        let tx = Transaction::read(&mut rdr).unwrap();
         let transparent_input = tv.transparent_input.map(|n| {
             (
                 n as usize,
                 &tv.script_code,
-                Amount::from_nonnegative_i64(tv.amount).unwrap(),
+                tv.asset_type,
+                tv.amount as u64,
             )
         });
 
@@ -84,12 +87,14 @@ fn zip_0143() {
 #[test]
 fn zip_0243() {
     for tv in self::data::zip_0243::make_test_vectors() {
-        let tx = Transaction::read(&tv.tx[..]).unwrap();
+        let mut rdr = &tv.tx[..];
+        let tx = Transaction::read(&mut rdr).unwrap();
         let transparent_input = tv.transparent_input.map(|n| {
             (
                 n as usize,
                 &tv.script_code,
-                Amount::from_nonnegative_i64(tv.amount).unwrap(),
+                tv.asset_type,
+                tv.amount as u64,
             )
         });
 

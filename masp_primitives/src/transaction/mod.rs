@@ -215,8 +215,7 @@ impl Transaction {
         };
 
         let (value_balance, shielded_spends, shielded_outputs) = if is_sapling_v4 {
-            let vb = Amount::read(reader)
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "valueBalance out of range"))?;
+            let vb = Amount::read(reader)?;
             let ss = Vector::read(reader, SpendDescription::read)?;
             let so = Vector::read(reader, OutputDescription::read)?;
             (vb, ss, so)
@@ -294,7 +293,7 @@ impl Transaction {
         }
 
         if is_sapling_v4 {
-            self.value_balance.write(writer);
+            self.value_balance.write(writer)?;
             Vector::write(writer, &self.shielded_spends, |w, e| e.write(w))?;
             Vector::write(writer, &self.shielded_outputs, |w, e| e.write(w))?;
         }

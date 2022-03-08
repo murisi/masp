@@ -583,12 +583,10 @@ impl std::fmt::Debug for JSDescription {
 impl JSDescription {
     pub fn read<R: Read>(reader: &mut R, use_groth: bool) -> io::Result<Self> {
         // Consensus rule (§4.3): Canonical encoding is enforced here
-        let vpub_old = Amount::read(reader)
-            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "vpub_old out of range"))?;
+        let vpub_old = Amount::read(reader)?;
 
         // Consensus rule (§4.3): Canonical encoding is enforced here
-        let vpub_new = Amount::read(reader)
-            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "vpub_new out of range"))?;
+        let vpub_new = Amount::read(reader)?;
 
         // Consensus rule (§4.3): One of vpub_old and vpub_new being zero is
         // enforced by CheckTransactionWithoutProofVerification() in zcashd.
