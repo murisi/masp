@@ -173,7 +173,7 @@ impl BorshSerialize for SpendDescription {
         BorshSerialize::serialize(&self.anchor.to_bytes(), writer)?;
         BorshSerialize::serialize(&self.nullifier, writer)?;
         BorshSerialize::serialize(&self.rk, writer)?;
-        writer.write(self.zkproof.as_ref());
+        writer.write(self.zkproof.as_ref())?;
         BorshSerialize::serialize(&self.spend_auth_sig, writer)
     }
 }
@@ -344,9 +344,9 @@ impl BorshSerialize for OutputDescription {
         BorshSerialize::serialize(&self.cv.to_bytes(), writer)?;
         BorshSerialize::serialize(&self.cmu.to_bytes(), writer)?;
         BorshSerialize::serialize(&self.ephemeral_key.to_bytes(), writer)?;
-        writer.write(self.enc_ciphertext.as_ref());
-        writer.write(self.out_ciphertext.as_ref());
-        writer.write(self.zkproof.as_ref());
+        writer.write(self.enc_ciphertext.as_ref())?;
+        writer.write(self.out_ciphertext.as_ref())?;
+        writer.write(self.zkproof.as_ref())?;
         Ok(())
     }
 }
@@ -459,11 +459,11 @@ impl BorshSerialize for SproutProof {
         match self {
             Self::Groth(groth) => {
                 BorshSerialize::serialize(&0u8, writer)?;
-                writer.write(groth.as_ref());
+                writer.write(groth.as_ref())?;
             }
             Self::PHGR(phgr) => {
                 BorshSerialize::serialize(&0u8, writer)?;
-                writer.write(phgr.as_ref());
+                writer.write(phgr.as_ref())?;
             }
         }
         Ok(())
@@ -481,8 +481,9 @@ impl std::fmt::Debug for SproutProof {
 
 #[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq, PartialOrd)]
 pub struct JSDescription {
-    vpub_old: Amount,
-    vpub_new: Amount,
+    asset_type: AssetType,
+    vpub_old: u64,
+    vpub_new: u64,
     anchor: [u8; 32],
     nullifiers: [[u8; 32]; ZC_NUM_JS_INPUTS],
     commitments: [[u8; 32]; ZC_NUM_JS_OUTPUTS],
@@ -508,6 +509,7 @@ fn deserialize_array<const N: usize>(buf: &mut &[u8]) -> borsh::maybestd::io::Re
 
 impl BorshDeserialize for JSDescription {
     fn deserialize(buf: &mut &[u8]) -> borsh::maybestd::io::Result<Self> {
+        let asset_type = BorshDeserialize::deserialize(buf)?;
         let vpub_old = BorshDeserialize::deserialize(buf)?;
         let vpub_new = BorshDeserialize::deserialize(buf)?;
         let anchor = BorshDeserialize::deserialize(buf)?;
@@ -518,12 +520,12 @@ impl BorshDeserialize for JSDescription {
         let macs = BorshDeserialize::deserialize(buf)?;
         let proof = BorshDeserialize::deserialize(buf)?;
         let mut ciphertexts = Vec::new();
-        let errf = || Error::from(ErrorKind::UnexpectedEof);
         for i in 0..ZC_NUM_JS_OUTPUTS {
             ciphertexts.push(deserialize_array(buf)?);
         }
         let ciphertexts = ciphertexts.try_into().unwrap();
         Ok(Self {
+            asset_type,
             vpub_old,
             vpub_new,
             anchor,
@@ -540,6 +542,7 @@ impl BorshDeserialize for JSDescription {
 
 impl BorshSerialize for JSDescription {
     fn serialize<W: Write>(&self, writer: &mut W) -> borsh::maybestd::io::Result<()> {
+        BorshSerialize::serialize(&self.asset_type, writer)?;
         BorshSerialize::serialize(&self.vpub_old, writer)?;
         BorshSerialize::serialize(&self.vpub_new, writer)?;
         BorshSerialize::serialize(&self.anchor, writer)?;
@@ -550,7 +553,7 @@ impl BorshSerialize for JSDescription {
         BorshSerialize::serialize(&self.macs, writer)?;
         BorshSerialize::serialize(&self.proof, writer)?;
         for ct in self.ciphertexts {
-            writer.write(ct.as_ref());
+            writer.write(ct.as_ref())?;
         }
         Ok(())
     }
@@ -582,11 +585,24 @@ impl std::fmt::Debug for JSDescription {
 
 impl JSDescription {
     pub fn read<R: Read>(reader: &mut R, use_groth: bool) -> io::Result<Self> {
+        let asset_type = {
+            let mut tmp = [0u8; 32];
+            reader.read_exact(&mut tmp)?;
+            AssetType::from_identifier(&tmp)
+        }.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid asset type"))?;
         // Consensus rule (§4.3): Canonical encoding is enforced here
-        let vpub_old = Amount::read(reader)?;
+        let vpub_old = {
+            let mut tmp = [0u8; 8];
+            reader.read_exact(&mut tmp)?;
+            u64::from_le_bytes(tmp)
+        };
 
         // Consensus rule (§4.3): Canonical encoding is enforced here
-        let vpub_new = Amount::read(reader)?;
+        let vpub_new = {
+            let mut tmp = [0u8; 8];
+            reader.read_exact(&mut tmp)?;
+            u64::from_le_bytes(tmp)
+        };
 
         // Consensus rule (§4.3): One of vpub_old and vpub_new being zero is
         // enforced by CheckTransactionWithoutProofVerification() in zcashd.
@@ -642,6 +658,7 @@ impl JSDescription {
             .collect::<io::Result<()>>()?;
 
         Ok(JSDescription {
+            asset_type,
             vpub_old,
             vpub_new,
             anchor,
@@ -656,8 +673,9 @@ impl JSDescription {
     }
 
     pub fn write<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-        self.vpub_old.write(writer)?;
-        self.vpub_new.write(writer)?;
+        writer.write_all(self.asset_type.get_identifier())?;
+        writer.write_all(&self.vpub_old.to_le_bytes())?;
+        writer.write_all(&self.vpub_new.to_le_bytes())?;
         writer.write_all(&self.anchor)?;
         writer.write_all(&self.nullifiers[0])?;
         writer.write_all(&self.nullifiers[1])?;

@@ -210,7 +210,7 @@ pub fn signature_hash_data(
             update_u32!(h, tx.expiry_height, tmp);
             if sigversion == SigHashVersion::Sapling {
                 let mut bytes = Vec::new();
-                tx.value_balance.write(&mut bytes);
+                tx.value_balance.write(&mut bytes).expect("value balance to serialize");
                 h.update(bytes.as_ref());
             }
             update_u32!(h, hash_type, tmp);

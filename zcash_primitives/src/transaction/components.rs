@@ -164,7 +164,7 @@ impl BorshSerialize for SpendDescription {
         BorshSerialize::serialize(&self.anchor.to_bytes(), writer)?;
         BorshSerialize::serialize(&self.nullifier, writer)?;
         BorshSerialize::serialize(&self.rk, writer)?;
-        writer.write(self.zkproof.as_ref());
+        writer.write(self.zkproof.as_ref())?;
         BorshSerialize::serialize(&self.spend_auth_sig, writer)
     }
 }
@@ -335,9 +335,9 @@ impl BorshSerialize for OutputDescription {
         BorshSerialize::serialize(&self.cv.to_bytes(), writer)?;
         BorshSerialize::serialize(&self.cmu.to_bytes(), writer)?;
         BorshSerialize::serialize(&self.ephemeral_key.to_bytes(), writer)?;
-        writer.write(self.enc_ciphertext.as_ref());
-        writer.write(self.out_ciphertext.as_ref());
-        writer.write(self.zkproof.as_ref());
+        writer.write(self.enc_ciphertext.as_ref())?;
+        writer.write(self.out_ciphertext.as_ref())?;
+        writer.write(self.zkproof.as_ref())?;
         Ok(())
     }
 }
@@ -450,11 +450,11 @@ impl BorshSerialize for SproutProof {
         match self {
             Self::Groth(groth) => {
                 BorshSerialize::serialize(&0u8, writer)?;
-                writer.write(groth.as_ref());
+                writer.write(groth.as_ref())?;
             }
             Self::PHGR(phgr) => {
                 BorshSerialize::serialize(&0u8, writer)?;
-                writer.write(phgr.as_ref());
+                writer.write(phgr.as_ref())?;
             }
         }
         Ok(())
@@ -509,7 +509,6 @@ impl BorshDeserialize for JSDescription {
         let macs = BorshDeserialize::deserialize(buf)?;
         let proof = BorshDeserialize::deserialize(buf)?;
         let mut ciphertexts = Vec::new();
-        let errf = || Error::from(ErrorKind::UnexpectedEof);
         for i in 0..ZC_NUM_JS_OUTPUTS {
             ciphertexts.push(deserialize_array(buf)?);
         }
@@ -541,7 +540,7 @@ impl BorshSerialize for JSDescription {
         BorshSerialize::serialize(&self.macs, writer)?;
         BorshSerialize::serialize(&self.proof, writer)?;
         for ct in self.ciphertexts {
-            writer.write(ct.as_ref());
+            writer.write(ct.as_ref())?;
         }
         Ok(())
     }
