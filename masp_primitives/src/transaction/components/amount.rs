@@ -12,12 +12,12 @@ use std::io::Write;
 const COIN: i64 = 1_0000_0000;
 const MAX_MONEY: i64 = 21_000_000 * COIN;
 
-pub fn ZEC() -> AssetType {
-    AssetType::from_identifier(&[0;32]).unwrap()
+pub fn zec() -> AssetType {
+    AssetType::new("ZEC".as_bytes()).unwrap()
 }
 
-pub fn DEFAULT_FEE() -> Amount {
-    Amount::from_u64(ZEC(), 10000).unwrap()
+pub fn default_fee() -> Amount {
+    Amount::from_u64(zec(), 10000).unwrap()
 }
 
 /// A type-safe representation of some quantity of Zcash.
@@ -189,7 +189,7 @@ impl Sum for Amount {
 
 #[cfg(test)]
 mod tests {
-    use super::{Amount, MAX_MONEY, ZEC};
+    use super::{Amount, MAX_MONEY, zec};
 
     /*#[test]
     fn amount_in_range() {
@@ -245,28 +245,28 @@ mod tests {
     #[test]
     #[should_panic]
     fn add_panics_on_overflow() {
-        let v = Amount::from_i64(ZEC(), MAX_MONEY).unwrap();
-        let _sum = v + Amount::from_i64(ZEC(), 1).unwrap();
+        let v = Amount::from_i64(zec(), MAX_MONEY).unwrap();
+        let _sum = v + Amount::from_i64(zec(), 1).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn add_assign_panics_on_overflow() {
-        let mut a = Amount::from_i64(ZEC(), MAX_MONEY).unwrap();
-        a += Amount::from_i64(ZEC(), 1).unwrap();
+        let mut a = Amount::from_i64(zec(), MAX_MONEY).unwrap();
+        a += Amount::from_i64(zec(), 1).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn sub_panics_on_underflow() {
-        let v = Amount::from_i64(ZEC(), -MAX_MONEY).unwrap();
-        let _diff = v - Amount::from_i64(ZEC(), 1).unwrap();
+        let v = Amount::from_i64(zec(), -MAX_MONEY).unwrap();
+        let _diff = v - Amount::from_i64(zec(), 1).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn sub_assign_panics_on_underflow() {
-        let mut a = Amount::from_i64(ZEC(), -MAX_MONEY).unwrap();
-        a -= Amount::from_i64(ZEC(), 1).unwrap();
+        let mut a = Amount::from_i64(zec(), -MAX_MONEY).unwrap();
+        a -= Amount::from_i64(zec(), 1).unwrap();
     }
 }

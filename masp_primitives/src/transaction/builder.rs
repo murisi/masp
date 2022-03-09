@@ -9,7 +9,7 @@ use std::fmt;
 use std::marker::PhantomData;
 use crate::transaction::AssetType;
 use std::collections::BTreeMap;
-use crate::transaction::components::amount::ZEC;
+use crate::transaction::components::amount::zec;
 #[cfg(feature = "transparent-inputs")]
 pub use secp256k1;
 #[cfg(feature = "transparent-inputs")]
@@ -25,7 +25,7 @@ use crate::{
     redjubjub::PrivateKey,
     sapling::{spend_sig, Node},
     transaction::{
-        components::{amount::DEFAULT_FEE, Amount, OutputDescription, SpendDescription, TxOut},
+        components::{amount::default_fee, Amount, OutputDescription, SpendDescription, TxOut},
         signature_hash_data, Transaction, TransactionData, SIGHASH_ALL,
     },
     util::generate_random_rseed,
@@ -350,7 +350,7 @@ impl<P: consensus::Parameters, R: RngCore + CryptoRng> Builder<P, R> {
             rng,
             height,
             mtx,
-            fee: DEFAULT_FEE(),
+            fee: default_fee(),
             anchor: None,
             spends: vec![],
             outputs: vec![],
@@ -637,7 +637,7 @@ impl<P: consensus::Parameters, R: RngCore + CryptoRng> Builder<P, R> {
                             pk_d,
                             rseed,
                             value: 0,
-                            asset_type: ZEC(),
+                            asset_type: zec(),
                         },
                     )
                 };
@@ -727,7 +727,7 @@ mod tests {
     use ff::{Field, PrimeField};
     use rand_core::OsRng;
     use std::marker::PhantomData;
-    use crate::transaction::components::amount::ZEC;
+    use crate::transaction::components::amount::zec;
 
     use super::{Builder, Error};
     use crate::{
@@ -751,7 +751,7 @@ mod tests {
 
         let mut builder = Builder::<TestNetwork, OsRng>::new(0);
         assert_eq!(
-            builder.add_sapling_output(Some(ovk), to, ZEC(), -1, None),
+            builder.add_sapling_output(Some(ovk), to, zec(), -1, None),
             Err(Error::InvalidAmount)
         );
     }*/
@@ -783,7 +783,7 @@ mod tests {
 
         // Create a tx with only t output. No binding_sig should be present
         builder
-            .add_transparent_output(&TransparentAddress::PublicKey([0; 20]), ZEC(), 0)
+            .add_transparent_output(&TransparentAddress::PublicKey([0; 20]), zec(), 0)
             .unwrap();
 
         let (tx, _) = builder
@@ -802,7 +802,7 @@ mod tests {
         let mut rng = OsRng;
 
         let note1 = to
-            .create_note(ZEC(), 50000, Rseed::BeforeZip212(jubjub::Fr::random(&mut rng)))
+            .create_note(zec(), 50000, Rseed::BeforeZip212(jubjub::Fr::random(&mut rng)))
             .unwrap();
         let cmu1 = Node::new(note1.cmu().to_repr());
         let mut tree = CommitmentTree::new();
@@ -822,7 +822,7 @@ mod tests {
             .unwrap();
 
         builder
-            .add_transparent_output(&TransparentAddress::PublicKey([0; 20]), ZEC(), 0)
+            .add_transparent_output(&TransparentAddress::PublicKey([0; 20]), zec(), 0)
             .unwrap();
 
         // Expect a binding signature error, because our inputs aren't valid, but this shows
@@ -859,7 +859,7 @@ mod tests {
             let builder = Builder::<TestNetwork, OsRng>::new(0);
             assert_eq!(
                 builder.build(consensus::BranchId::Sapling, &MockTxProver),
-                Err(Error::ChangeIsNegative(Amount::from_i64(ZEC(), -10000).unwrap()))
+                Err(Error::ChangeIsNegative(Amount::from_i64(zec(), -10000).unwrap()))
             );
         }
 
@@ -875,14 +875,14 @@ mod tests {
                 .add_sapling_output(
                     ovk.clone(),
                     to.clone(),
-                    ZEC(),
+                    zec(),
                     50000,
                     None,
                 )
                 .unwrap();
             assert_eq!(
                 builder.build(consensus::BranchId::Sapling, &MockTxProver),
-                Err(Error::ChangeIsNegative(Amount::from_i64(ZEC(), -60000).unwrap()))
+                Err(Error::ChangeIsNegative(Amount::from_i64(zec(), -60000).unwrap()))
             );
         }
 
@@ -893,18 +893,18 @@ mod tests {
             builder
                 .add_transparent_output(
                     &TransparentAddress::PublicKey([0; 20]),
-                    ZEC(),
+                    zec(),
                     50000,
                 )
                 .unwrap();
             assert_eq!(
                 builder.build(consensus::BranchId::Sapling, &MockTxProver),
-                Err(Error::ChangeIsNegative(Amount::from_i64(ZEC(), -60000).unwrap()))
+                Err(Error::ChangeIsNegative(Amount::from_i64(zec(), -60000).unwrap()))
             );
         }
 
         let note1 = to
-            .create_note(ZEC(), 59999, Rseed::BeforeZip212(jubjub::Fr::random(&mut rng)))
+            .create_note(zec(), 59999, Rseed::BeforeZip212(jubjub::Fr::random(&mut rng)))
             .unwrap();
         let cmu1 = Node::new(note1.cmu().to_repr());
         let mut tree = CommitmentTree::new();
@@ -927,7 +927,7 @@ mod tests {
                 .add_sapling_output(
                     ovk.clone(),
                     to.clone(),
-                    ZEC(),
+                    zec(),
                     30000,
                     None,
                 )
@@ -935,18 +935,18 @@ mod tests {
             builder
                 .add_transparent_output(
                     &TransparentAddress::PublicKey([0; 20]),
-                    ZEC(),
+                    zec(),
                     20000,
                 )
                 .unwrap();
             assert_eq!(
                 builder.build(consensus::BranchId::Sapling, &MockTxProver),
-                Err(Error::ChangeIsNegative(Amount::from_i64(ZEC(), -1).unwrap()))
+                Err(Error::ChangeIsNegative(Amount::from_i64(zec(), -1).unwrap()))
             );
         }
 
         let note2 = to
-            .create_note(ZEC(), 1, Rseed::BeforeZip212(jubjub::Fr::random(&mut rng)))
+            .create_note(zec(), 1, Rseed::BeforeZip212(jubjub::Fr::random(&mut rng)))
             .unwrap();
         let cmu2 = Node::new(note2.cmu().to_repr());
         tree.append(cmu2).unwrap();
@@ -972,12 +972,12 @@ mod tests {
                 .add_sapling_spend(extsk, *to.diversifier(), note2, witness2.path().unwrap())
                 .unwrap();
             builder
-                .add_sapling_output(ovk, to, ZEC(), 30000, None)
+                .add_sapling_output(ovk, to, zec(), 30000, None)
                 .unwrap();
             builder
                 .add_transparent_output(
                     &TransparentAddress::PublicKey([0; 20]),
-                    ZEC(),
+                    zec(),
                     20000,
                 )
                 .unwrap();
