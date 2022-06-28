@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::iter::Sum;
 use std::ops::{Add, AddAssign, Sub, SubAssign, Mul};
 use std::collections::BTreeMap;
+use crate::convert::AllowedConversion;
 use crate::transaction::AssetType;
 use std::iter::FromIterator;
 use crate::serialize::Vector;
@@ -260,6 +261,18 @@ impl SubAssign<Amount> for Amount {
 impl Sum for Amount {
     fn sum<I: Iterator<Item = Amount>>(iter: I) -> Amount {
         iter.fold(Amount::zero(), Add::add)
+    }
+}
+
+impl From<AllowedConversion> for Amount {
+    fn from(conv: AllowedConversion) -> Amount {
+        Amount(conv.assets)
+    }
+}
+
+impl Into<AllowedConversion> for Amount {
+    fn into(self) -> AllowedConversion {
+        AllowedConversion { assets: self.0 }
     }
 }
 
