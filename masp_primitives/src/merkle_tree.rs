@@ -4,6 +4,9 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 
+use rayon::iter::ParallelIterator;
+use rayon::iter::IndexedParallelIterator;
+use rayon::slice::ParallelSlice;
 use incrementalmerkletree::{self, bridgetree};
 use zcash_encoding::{Optional, Vector};
 use borsh::{BorshSerialize, BorshDeserialize};
@@ -33,7 +36,7 @@ impl<Node: Hashable> PathFiller<Node> {
 #[derive(Clone, Debug, Default)]
 pub struct FrozenCommitmentTree<Node>(Vec<Node>, usize);
 
-impl<Node: Hashable> FrozenCommitmentTree<Node> {
+impl<Node: Hashable + Sync + Send> FrozenCommitmentTree<Node> {
     /// Construct a commitment tree with the given leaf nodes
     pub fn new(leafs: &[Node]) -> Self {
         let mut tree = Vec::with_capacity(leafs.len()*2 + SAPLING_COMMITMENT_TREE_DEPTH + 1);
@@ -100,6 +103,8 @@ impl<Node: Hashable> FrozenCommitmentTree<Node> {
         heightp: usize,
         leafs: usize,
     ) -> Self {
+        // Lets distribute hashing operations equally across cores
+        let num_threads = rayon::current_num_threads();
         // Add higher and higher rows of the Merkle tree
         for height in heightp..SAPLING_COMMITMENT_TREE_DEPTH {
             if prev_width % 2 == 1 {
@@ -107,15 +112,24 @@ impl<Node: Hashable> FrozenCommitmentTree<Node> {
                 prev_width += 1;
                 tree.push(Node::empty_root(height))
             }
-            for j in 0..(prev_width/2) {
-                // Add the nodes of the next row dependent upon previous row
-                let comb = Node::combine(
-                    height,
-                    &tree[prev_start + 2*j],
-                    &tree[prev_start + 2*j + 1]
-                );
-                tree.push(comb);
-            }
+            // Try to distribute Merkle leaf hashing as evenly as possible across
+            // multiple cores
+            let pairs_per_thread_min = (prev_width/2) / num_threads;
+            let pairs_per_thread_max = ((prev_width/2) + num_threads - 1) / num_threads;
+            // Combine each pair of Merkle leaves in parallel
+            let mut next_row: Vec<_> = tree[prev_start..]
+                .par_chunks(2)
+                .with_min_len(pairs_per_thread_min)
+                .with_max_len(pairs_per_thread_max)
+                .map(|pair| {
+                    // Add the nodes of the next row dependent upon previous row
+                    Node::combine(
+                        height,
+                        &pair[0],
+                        &pair[1],
+                    )
+                }).collect();
+            tree.append(&mut next_row);
             // Next row will be adjacent to current row in vector
             prev_start += prev_width;
             prev_width /= 2;
@@ -850,6 +864,33 @@ mod tests {
                 .write(&mut tmp[..])
                 .expect("length is 32 bytes");
             assert_eq!(hex::encode(tmp), expected);
+        }
+    }
+
+    #[test]
+    fn test_large_frozen_tree() {
+        use rand::rngs::OsRng;
+        use rand::RngCore;
+        let mut orig = CommitmentTree::empty();
+        let mut cmus = Vec::new();
+        let mut paths:Vec<IncrementalWitness<Node>> = Vec::new();
+        for _ in 0..100 {
+            let mut cmu = [0; 32];
+            OsRng.fill_bytes(&mut cmu);
+            let cmu = Node::new(cmu);
+            orig.append(cmu).unwrap();
+            cmus.push(cmu);
+            for path in &mut paths {
+                path.append(cmu).unwrap();
+            }
+            paths.push(IncrementalWitness::from_tree(&orig));
+        }
+        let frozen = FrozenCommitmentTree::new(&cmus[..]);
+        assert_eq!(orig.root(), frozen.root());
+        for (i, path) in paths.iter().enumerate() {
+            let path = path.path().unwrap();
+            assert_eq!(path.auth_path, frozen.path(i).auth_path);
+            assert_eq!(path.position, frozen.path(i).position);
         }
     }
 
