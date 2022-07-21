@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::iter::Sum;
 use std::ops::{Add, AddAssign, Sub, SubAssign, Mul, MulAssign};
 use std::collections::BTreeMap;
-use crate::transaction::AssetType;
+use crate::convert::AllowedConversion;
+use crate::asset_type::AssetType;
 use crate::serialize::Vector;
 use std::io::Read;
 use std::io::Write;
@@ -34,6 +35,11 @@ const MAX_MONEY: i64 = 21_000_000 * COIN;
 pub struct Amount<Unit: Hash + Ord + BorshSerialize + BorshDeserialize = AssetType>(BTreeMap<Unit, i64>);
 
 impl<Unit: Hash + Ord + BorshSerialize + BorshDeserialize + Clone> Amount<Unit> {
+    /// Creates a new Amount from Assettype to value map
+    pub fn new(data: BTreeMap<Unit, i64>) -> Self {
+        Self(data)
+    }
+
     /// Returns a zero-valued Amount.
     pub fn zero() -> Self {
         Amount(BTreeMap::new())
@@ -290,17 +296,21 @@ impl<Unit: Hash + Ord + BorshSerialize + BorshDeserialize + Clone> Sum for Amoun
     }
 }
 
-pub fn zec() -> AssetType {
-    AssetType::new(b"ZEC").unwrap()
+impl From<AllowedConversion> for Amount<AssetType> {
+    fn from(conv: AllowedConversion) -> Amount {
+        conv.assets()
+    }
 }
 
-pub fn default_fee() -> Amount {
-    Amount::from_pair(zec(), 10000).unwrap()
-}
 
 #[cfg(test)]
 mod tests {
-    use super::{Amount, MAX_MONEY, zec};
+    use super::{Amount, AssetType, MAX_MONEY};
+
+    pub fn zec() -> AssetType {
+        AssetType::new(b"ZEC").unwrap()
+    }
+    
 
     #[test]
     fn amount_in_range() {
